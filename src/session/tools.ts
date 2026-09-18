@@ -16,14 +16,32 @@ export function toolStatus(name: string): string {
   return '正在处理';
 }
 
+/**
+ * 工具名 → 动作词。**整表镜像桌面端 ChatBlocks.tsx 的 TOOL_LABELS**（同顺序、同用词），
+ * 手机端只补 PC 表里还没有、但实际会话会出现的那几个——两边用词不一致时以 PC 为准。
+ */
 const TOOL_LABELS: Record<string, string> = {
-  bash: '终端', read: '读取', write: '写入', edit: '编辑', glob: '查找文件', grep: '搜索',
-  task: 'Agent', webfetch: '获取网页', websearch: '联网搜索', use_skill: '技能',
+  bash: '命令', edit: '编辑', read: '查看', write: '编写', grep: '搜索文件',
+  find: '查找文件', ls: '列出目录', powershell: 'PowerShell',
+  task: '派遣 Agent', create_agent_template: '创建模板', list_agents: '查看 Agent',
+  read_agent_log: '读取日志', stop_agent: '停止 Agent',
+  use_skill: '加载技能', manage_skill: '管理技能', learn: '沉淀经验',
+  search_experiences: '搜索经验', retire_experiences: '退役经验', import_skill: '导入', import_mcp_server: '导入',
+  show_confirm_dev: '确认开发', refresh_tasks: '刷新任务',
+  set_task_status: '更新任务', show_prototype: '预览原型',
+  list_issues: '查看 Issue', set_issue_status: '更新 Issue',
+  web_fetch: '抓取网页', web_search: '搜索网页',
+  todo_write: '更新步骤', todo_user: '用户待办',
+  ask_user: '提问', describe_image: '查看图片',
+  // 以下为手机端补充（PC 表尚未收录，缺了会退回「工具」）
+  stop_shell: '停止命令', install_dependency: '安装依赖',
 };
 
 /** 工具卡标题行文案：动作词 + 关键参数（命令 / 文件 / 查询词） */
 export function toolDisplay(tool: DisplayToolBlock): string {
-  const label = TOOL_LABELS[tool.name.toLowerCase()] ?? (tool.name.startsWith('mcp__') ? '外部工具' : tool.name);
+  const name = tool.name.toLowerCase();
+  // 与 PC 同口径：未收录的工具按 MCP / 工具 两类退化，不直接显示英文名
+  const label = TOOL_LABELS[name] ?? (name.startsWith('mcp__') ? 'MCP' : '工具');
   const input = tool.input ?? {};
   const detail = input.command ?? input.file_path ?? input.path ?? input.query ?? input.url ?? input.description;
   return typeof detail === 'string' && detail.trim() ? `${label} · ${detail.trim()}` : label;

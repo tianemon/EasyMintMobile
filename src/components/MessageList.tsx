@@ -1,6 +1,6 @@
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
-import type { LayoutChangeEvent, ListRenderItemInfo } from 'react-native';
+import type { ListRenderItemInfo } from 'react-native';
 import type { DisplayMessage } from '../session/messages';
 import { colors, fontSize, radius } from '../theme/tokens';
 import { MarkdownView } from './markdown/MarkdownView';
@@ -10,63 +10,88 @@ import { ToolCard } from './ToolCard';
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  // 定位期临时样式（消息区异常排查完移除）
-  debug: { paddingHorizontal: 8, paddingBottom: 4, color: '#1a1a1a', backgroundColor: '#ffe58f', fontSize: 10 },
-  chatList: { padding: 14, gap: 12, flexGrow: 1, justifyContent: 'flex-start' },
-  bubble: { maxWidth: '88%', padding: 13, borderRadius: radius.lg },
+  content: { padding: 14 },
+  /**
+   * ⚠ 行与气泡必须显式 flexGrow: 0 / flexShrink: 0 —— 它们是"按内容定高"的，不能参与弹性分配。
+   *
+   * 这是长会话空白块的根因：RN 的 ScrollView 默认带 `flexGrow: 1, flexShrink: 1`
+   * （ScrollView.js 的 baseVertical/baseHorizontal），行内凡出现 ScrollView 就会被 Yoga
+   * 按弹性项伸展，把整行撑到畸形高度（实测单行 267030px，比整个列表的内容高还大），
+   * 表现为一片盖住消息、翻不回去的空白。
+   */
+  row: { flexGrow: 0, flexShrink: 0, paddingBottom: 12 },
+  bubble: { flexGrow: 0, flexShrink: 0, maxWidth: '88%', padding: 13, borderRadius: radius.lg },
   userBubble: { alignSelf: 'flex-end', backgroundColor: colors.card },
   assistantBubble: { alignSelf: 'flex-start', backgroundColor: colors.cardAgent },
-  systemBubble: { alignSelf: 'center', backgroundColor: colors.surfaceAlt },
   bubbleText: { color: colors.textPrimary, fontSize: fontSize.base, lineHeight: 22 },
 });
 
 type MessageListProps = { messages: DisplayMessage[] };
 
-// 以下三项提到模块级：身份稳定，避免每次列表渲染都换新引用导致 FlatList 重建单元格
-const keyExtractor = (item: DisplayMessage): string => item.id;
-const contentContainerStyle = styles.chatList;
+/** 稳定 renderItem / keyExtractor：store 每次事件都产生新数组，内联函数会让 FlatList 对全部行重新求值 */
+const keyExtractor = (message: DisplayMessage): string => message.id;
 const maintainVisibleContentPosition = { minIndexForVisible: 0, autoscrollToTopThreshold: 72 };
-const renderItem = ({ item }: ListRenderItemInfo<DisplayMessage>) => <MessageRow message={item} />;
 
-/** 消息流（inverted 列表：数据已是「最新在前」） */
+/**
+ * 消息流 —— inverted FlatList，数据顺序为「最新在前」。
+ *
+ * inverted 让 offset=0 天然对应最新消息，避免超长、变高消息下 scrollToEnd 使用平均行高
+ * 估算而停在历史中间。Android 上的思考块不能把边界剩余位移交给这个镜像父列表：
+ * ThinkingBlock 在整个触摸手势期间通知这里关闭父列表 scrollEnabled，并且自身关闭
+ * nestedScrollEnabled。内层仍由自己的 ScrollView 正常滚动，滚到边界后剩余位移被丢弃，
+ * 手势结束再恢复消息列表，等价于 PC 的 overscroll-behavior: contain。
+ *
+ * maintainVisibleContentPosition 显式开启：用户停在最新消息附近时跟随流式增长；上翻历史后
+ * 不会被新内容拉回。它不是 VirtualizedList 的默认行为，不能删掉后依赖隐式锚定。
+ */
 export const MessageList = memo(function MessageList({ messages }: MessageListProps) {
-  // ── 定位期临时诊断（消息区异常排查完移除）───────────────────────────
-  const [contentHeight, setContentHeight] = useState(0);
-  const [viewHeight, setViewHeight] = useState(0);
-  return <View style={styles.wrap} onLayout={(e: LayoutChangeEvent) => setViewHeight(Math.round(e.nativeEvent.layout.height))}>
-    <FlatList data={messages} keyExtractor={keyExtractor}
-      inverted contentContainerStyle={contentContainerStyle} keyboardShouldPersistTaps="handled"
+  const [innerScrollGesture, setInnerScrollGesture] = useState(false);
+  const setInnerGesture = useCallback((active: boolean): void => setInnerScrollGesture(active), []);
+  const renderRow = useCallback(({ item }: ListRenderItemInfo<DisplayMessage>) =>
+    <MessageRow message={item} onInnerScrollGesture={setInnerGesture} />, [setInnerGesture]);
+
+  return <View style={styles.wrap}>
+    <FlatList
+      data={messages}
+      renderItem={renderRow}
+      keyExtractor={keyExtractor}
+      style={styles.wrap}
+      contentContainerStyle={styles.content}
+      inverted
+      scrollEnabled={!innerScrollGesture}
       maintainVisibleContentPosition={maintainVisibleContentPosition}
-      onContentSizeChange={(_w: number, h: number) => setContentHeight(Math.round(h))}
-      renderItem={renderItem} />
-    <Text style={styles.debug} selectable numberOfLines={3}>
-      {`诊断 消息${messages.length}条 · 内容高${contentHeight} · 视口高${viewHeight} · ${describeMessages(messages)}`}
-    </Text>
+      keyboardShouldPersistTaps="handled"
+      removeClippedSubviews
+      // 首屏与批次的渲染量：长会话下把挂载量压在几十行内，避免一次性挂满几百行造成卡顿
+      initialNumToRender={12}
+      maxToRenderPerBatch={8}
+      windowSize={7}
+    />
   </View>;
 });
 
-/** 每条消息的角色与块种类（只列前 4 条），用于判断是数据不对还是布局不对 */
-function describeMessages(messages: DisplayMessage[]): string {
-  return messages.slice(0, 4).map((message, index) => {
-    const kinds = message.blocks?.map((block) => block.kind).join('/');
-    const size = message.text ? `t${message.text.length}` : '';
-    return `#${index}${message.role[0]}${kinds ? `(${kinds})` : ''}${size}`;
-  }).join(' ');
-}
-
 /**
  * memo：props 只有该条消息本体。流式帧只替换正在流式的那一条（见 upsertMessage），
- * 其余消息引用不变 → 浅比较相等 → React 跳过这些行的渲染（流式期间非流式行 render 次数为 0）。
+ * 其余消息引用不变 → 浅比较相等 → React 跳过这些行的渲染。
  */
-const MessageRow = memo(function MessageRow({ message }: { message: DisplayMessage }) {
-  if (message.role === 'system') return <SystemCard message={message} />;
-  if (message.role === 'user') return <View style={[styles.bubble, styles.userBubble]}><Text selectable style={styles.bubbleText}>{message.text}</Text></View>;
-  return <View style={[styles.bubble, styles.assistantBubble]}>{message.blocks?.map((block, index) => {
-    const isLast = index === (message.blocks?.length ?? 0) - 1;
-    if (block.kind === 'thinking') return <ThinkingBlock key={`${message.id}-${index}-thinking`} content={block.text}
-      active={!!message.streaming && isLast} />;
-    if (block.kind === 'tool') return <ToolCard key={`${message.id}-${block.id || index}`} tool={block} />;
-    // 模型正文走 Markdown 渲染；fadeTail 只给流式中正在增长的尾块（尾部字符渐隐）
-    return <MarkdownView key={`${message.id}-${index}-text`} text={block.text} fadeTail={!!message.streaming && isLast} />;
-  })}</View>;
+const MessageRow = memo(function MessageRow({ message, onInnerScrollGesture }: {
+  message: DisplayMessage;
+  onInnerScrollGesture: (active: boolean) => void;
+}) {
+  if (message.role === 'system') return <View style={styles.row}><SystemCard message={message} /></View>;
+  if (message.role === 'user') {
+    return <View style={styles.row}>
+      <View style={[styles.bubble, styles.userBubble]}><Text selectable style={styles.bubbleText}>{message.text}</Text></View>
+    </View>;
+  }
+  return <View style={styles.row}>
+    <View style={[styles.bubble, styles.assistantBubble]}>{message.blocks?.map((block, index) => {
+      const isLast = index === (message.blocks?.length ?? 0) - 1;
+      if (block.kind === 'thinking') return <ThinkingBlock key={`${message.id}-${index}-thinking`} content={block.text}
+        active={!!message.streaming && isLast} onInnerScrollGesture={onInnerScrollGesture} />;
+      if (block.kind === 'tool') return <ToolCard key={`${message.id}-${block.id || index}`} tool={block} />;
+      // 模型正文走 Markdown 渲染；fadeTail 只给流式中正在增长的尾块（尾部字符渐隐）
+      return <MarkdownView key={`${message.id}-${index}-text`} text={block.text} fadeTail={!!message.streaming && isLast} />;
+    })}</View>
+  </View>;
 });

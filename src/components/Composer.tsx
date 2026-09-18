@@ -1,5 +1,6 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import type { ModelCapabilities, PermissionMode } from '../protocol/types';
 import { THINKING_LABELS } from '../session/thinking';
 import { commonStyles } from '../theme/commonStyles';
@@ -21,6 +22,8 @@ export type ComposerProps = {
   model: string;
   provider: ModelProvider | null;
   contextPercent: number | null;
+  /** 上下文窗口大小（token）；未知时悬浮只报百分比 */
+  contextWindow: number | null;
   control: ComposerControl;
   onDraftChange: (value: string) => void;
   onControlChange: (control: ComposerControl) => void;
@@ -33,12 +36,36 @@ export type ComposerProps = {
 
 const PERMISSION_OPTIONS = [['readonly', '只读'], ['standard', '标准'], ['full', '完全访问']] as const;
 
+// ── 上下文使用率环（几何与 PC 的 .ctx-ring 一致）────────────────
+/** PC：svg 20×20 / r=8 / stroke 2.5 / 从 12 点起画（svg 整体旋转 -90°） */
+const RING_SIZE = 20;
+const RING_R = 8;
+const RING_STROKE = 2.5;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_R; // 50.27
+
+/** 与 PC 的 ctxTip 同口径 */
+function contextTip(percent: number | null, windowTokens: number | null): string {
+  if (windowTokens === null) return percent === null ? '上下文使用率' : `上下文使用率 ${Math.round(percent)}%`;
+  const windowLabel = formatTokenWindow(windowTokens);
+  return percent === null ? `上下文窗口 ${windowLabel}` : `上下文窗口 ${windowLabel} · 已用 ${Math.round(percent)}%`;
+}
+
+/** 与 PC 的 formatTokenWindow 同口径（十进制优先：128000 同时是 125×1024，先判 1024 会显示成 125K） */
+function formatTokenWindow(tokens: number): string {
+  if (tokens >= 1_000_000) return `${Number((tokens / 1_000_000).toFixed(2))}M`;
+  if (tokens % 1000 === 0) return `${tokens / 1000}K`;
+  if (tokens % 1024 === 0) return `${tokens / 1024}K`;
+  return `${Math.floor(tokens / 1000)}K`;
+}
+
 /**
  * 输入卡片：多行输入 + 工具栏（模型/权限/思考/上下文占用/发送）+ 工具菜单。
  * memo：流式期间 App 每帧重渲染，props 未变时跳过整块输入卡（调用方需传稳定 props，见 App 的 composer）。
  */
 export const Composer = memo(function Composer(props: ComposerProps) {
-  const { draft, running, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, control } = props;
+  const { draft, running, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, contextWindow, control } = props;
+  const [showContextTip, setShowContextTip] = useState(false);
+  const contextTipText = contextTip(contextPercent, contextWindow);
   const sendDisabled = running && !hasSession ? true : (!running && !draft.trim());
   return <View style={[styles.composerCard, shadow.sm]}>
     <TextInput value={draft} onChangeText={props.onDraftChange} placeholder={running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'} multiline style={styles.composerInput} />
@@ -52,7 +79,16 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       <Pressable accessibilityLabel={`选择思考等级，当前 ${THINKING_LABELS[thinking] ?? thinking}`} style={[styles.composerIconButton, control === 'thinking' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'thinking' ? null : 'thinking')}>
         <ComposerIcon kind="thinking" />
       </Pressable>
-      <View accessibilityLabel={`上下文使用率 ${contextPercent === null ? '未知' : `${Math.round(contextPercent)}%`}`} style={styles.contextUsage}><View style={styles.contextRing}><Text style={styles.contextUsageText}>{contextPercent === null ? '—' : `${Math.round(contextPercent)}%`}</Text></View></View>
+      {/* 上下文使用率环：点击浮出具体数值（PC 是同位置 hover 悬浮，手机无 hover 改点击） */}
+      <Pressable accessibilityLabel={contextTipText} onPress={() => setShowContextTip((value) => !value)} style={styles.contextUsage}>
+        <Svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} style={styles.contextRingSvg}>
+          <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R} fill="none" stroke={colors.surfaceHover} strokeWidth={RING_STROKE} />
+          <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R} fill="none" stroke={colors.accent} strokeWidth={RING_STROKE} strokeLinecap="round"
+            strokeDasharray={RING_CIRCUMFERENCE}
+            strokeDashoffset={contextPercent === null ? RING_CIRCUMFERENCE : RING_CIRCUMFERENCE * (1 - contextPercent / 100)} />
+        </Svg>
+        {showContextTip && <View style={styles.contextTip}><Text numberOfLines={1} style={styles.contextTipText}>{contextTipText}</Text></View>}
+      </Pressable>
       <Pressable disabled={sendDisabled} onPress={() => running && hasSession ? props.onStop() : props.onSend()}
         style={({ pressed }) => [styles.sendButton, (pressed || sendDisabled) && commonStyles.dim, running && styles.stopButton]}>
         <SendIcon stop={running && hasSession} />
@@ -83,9 +119,12 @@ const styles = StyleSheet.create({
   composerToolbar: { minHeight: 38, paddingLeft: space.s1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   composerIconButton: { width: 26, height: 26, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   composerControlActive: { backgroundColor: colors.surfaceHover },
-  contextUsage: { marginLeft: 2, minWidth: 42, height: 30, alignItems: 'center', justifyContent: 'center' },
-  contextRing: { minWidth: 38, height: 24, paddingHorizontal: 5, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputField },
-  contextUsageText: { color: colors.textSecondary, fontSize: fontSize.xxs, fontWeight: '700' },
+  contextUsage: { marginLeft: 2, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  // PC 的 .ctx-ring svg：整体旋转 -90°，让进度从 12 点方向起画
+  contextRingSvg: { transform: [{ rotate: '-90deg' }] },
+  // 锚在左侧向右生长：圆环左边只剩约 100px，靠右锚定会把文字撩出屏幕外
+  contextTip: { position: 'absolute', bottom: 32, left: -8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.elevated, ...shadow.sm },
+  contextTipText: { color: colors.textPrimary, fontSize: fontSize.caption, fontWeight: '600' },
   sendButton: { marginLeft: 'auto', marginRight: 10, width: 32, height: 32, borderRadius: radius.lg, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   stopButton: { backgroundColor: colors.dangerBg },
   sendButtonText: { color: colors.textInverse, fontSize: fontSize.title, lineHeight: 18, fontWeight: '800' },

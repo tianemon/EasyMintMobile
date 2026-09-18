@@ -18,7 +18,7 @@ export type DisplayMessage = {
   systemKind?: string;
 };
 
-/** 新消息插到列表头部（列表顺序与 MessageList 的 inverted 一致：最新在前） */
+/** 新消息插到列表头部（inverted 列表：最新在前） */
 export function prependMessage(list: DisplayMessage[], message: DisplayMessage): DisplayMessage[] {
   return [message, ...list];
 }

@@ -5,7 +5,7 @@ import { Composer } from '../components/Composer';
 import type { ComposerProps } from '../components/Composer';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Header } from '../components/Header';
-import { ComposerIcon } from '../components/icons';
+import { ModelGlyph } from '../components/icons';
 import { MessageList } from '../components/MessageList';
 import { ConnectionIndicator } from '../components/ProjectTitle';
 import type { BackgroundAgent, BackgroundShell, PendingAsk } from '../protocol/types';
@@ -44,12 +44,17 @@ export function ChatScreen(props: ChatScreenProps) {
   </KeyboardAvoidingView>;
 }
 
-/** 运行状态行：模型图标 + 当前动作文案 */
+/** 运行状态行：模型图标（带动画）+ 当前动作文案，与 PC StatusBar 同构 */
 function MintStatus({ text }: { text: string }) {
-  return <View style={styles.mintStatus}><ComposerIcon kind="model" /><Text style={styles.mintStatusText}>{text}</Text></View>;
+  // 图标占固定宽度（PC 是 w-[1.25em]）：动效不能把右侧文字推来推去
+  return <View style={styles.mintStatus}>
+    <View style={styles.mintStatusGlyph}><ModelGlyph animated size={14} color={colors.textSecondary} /></View>
+    <Text style={styles.mintStatusText}>{text}</Text>
+  </View>;
 }
 
 const styles = StyleSheet.create({
   mintStatus: { minHeight: 26, marginHorizontal: space.s4, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  mintStatusGlyph: { width: 16, alignItems: 'center', justifyContent: 'center' },
   mintStatusText: { color: colors.textSecondary, fontSize: fontSize.caption, fontWeight: '500' },
 });

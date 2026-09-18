@@ -69,8 +69,10 @@ const styles = StyleSheet.create({
   },
   language: { color: colors.textMuted, fontSize: fontSize.caption, letterSpacing: 0.5 },
   copy: { color: colors.textSecondary, fontSize: fontSize.caption },
-  // alignSelf: stretch 显式声明横向拉满父宽度（列容器默认行为）——代码再长也不靠自身内容宽把气泡撑宽，只在自己块内滚
-  scroll: { alignSelf: 'stretch', backgroundColor: colors.codeBlockBg },
+  // alignSelf: stretch 显式声明横向拉满父宽度（列容器默认行为）——代码再长也不靠自身内容宽把气泡撑宽，只在自己块内滚。
+  // flexGrow: 0 / flexShrink: 0：RN 的 ScrollView 默认 flexGrow: 1（baseHorizontal），
+  // 嵌在行/气泡里会被当成弹性项伸展成空白容器，这里必须显式管住（同 ThinkingBlock）。
+  scroll: { flexGrow: 0, flexShrink: 0, alignSelf: 'stretch', backgroundColor: colors.codeBlockBg },
   scrollContent: { paddingHorizontal: space.s3, paddingVertical: space.s2 },
   code: { color: colors.textPrimary, fontFamily: monoFont, fontSize: fontSize.code, lineHeight: 17 },
 });

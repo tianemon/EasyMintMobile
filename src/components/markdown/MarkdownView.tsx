@@ -171,11 +171,13 @@ const styles = StyleSheet.create({
   marker: { color: colors.textSecondary, fontSize: fontSize.body, lineHeight: 22, minWidth: 20 },
   markerOrdered: { textAlign: 'right', paddingRight: space.s1 + 2 },
   markerBullet: { textAlign: 'left' },
-  listItemBody: { flex: 1, minWidth: 0 },
+  // 同理禁用 `flex: 1`（flexBasis: 0）——气泡按内容撑开时它会让宽度坍缩；用 flexGrow + flexBasis auto
+  listItemBody: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   table: { marginVertical: space.s2 },
   tableRow: { flexDirection: 'row' },
   tableCell: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     minWidth: 0,
     paddingHorizontal: space.s1,
     paddingVertical: space.s1,

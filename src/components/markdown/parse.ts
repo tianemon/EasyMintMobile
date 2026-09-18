@@ -114,10 +114,20 @@ export function splitFadeTail(text: string, count = TAIL_FADE_CHARS): { head: st
   const body = match?.[1] ?? text;
   const trailing = match?.[2] ?? '';
   if (count <= 0 || !body) return { head: '', tail: [], trailing: text };
-  const units = graphemes(body);
-  if (units.length <= count) return { head: '', tail: units, trailing };
-  const cut = units.slice(0, units.length - count).join('');
-  return { head: cut, tail: units.slice(units.length - count), trailing };
+  // 只对末尾一小段做 grapheme 切分。
+  // 渐隐只关心最后 count 个字，而 body 可能是几万字的思考全文——每帧对全文切一次
+  // 是流式卡顿的主因之一（Intl.Segmenter 建几万个对象 + 紧跟的 GC）。
+  // 取 8 倍余量：一个 grapheme 通常 ≤ 2 个 UTF-16 码元，emoji 序列更长。
+  let start = body.length - count * 8;
+  if (start > 0 && body.charCodeAt(start) >= 0xDC00 && body.charCodeAt(start) <= 0xDFFF) start -= 1; // 不切在代理对中间
+  const slice = body.slice(Math.max(0, start));
+  const units = graphemes(slice);
+  if (units.length <= count) {
+    // 末尾这一段本身就是全部尾部（说明 body 极短）——头部是 body 去掉这段，不能整个丢掉
+    return { head: body.slice(0, body.length - slice.length), tail: units, trailing };
+  }
+  const tail = units.slice(units.length - count);
+  return { head: body.slice(0, body.length - tail.join('').length), tail, trailing };
 }
 
 /** 第 index 个渐隐字符的不透明度：线性衰减到 TAIL_FADE_MIN_OPACITY（等效 CSS 横向渐变） */

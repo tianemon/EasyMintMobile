@@ -30,10 +30,15 @@ export function ToolCard({ tool }: ToolCardProps) {
 const styles = StyleSheet.create({
   toolCard: { marginVertical: 3, alignSelf: 'stretch', borderRadius: radius.lg, backgroundColor: colors.cmdBox, overflow: 'hidden' },
   toolCardError: { backgroundColor: colors.dangerBg },
-  toolHeader: { minHeight: 40, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  toolTitleRow: { minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.s2 },
-  toolTitle: { flex: 1, color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
-  toolStateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  toolHeader: { minHeight: 40, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // ⚠ 不能用 `flex: 1`（= flexBasis: 0）：气泡是按内容撑开的（alignSelf: flex-start），
+  // flexBasis 0 意味着这一项对气泡的宽度贡献为 0，气泡会被压到最小宽度，
+  // 于是图标、文字、对勾全挤在一起。用 flexGrow + flexBasis auto：能填满剩余宽度，
+  // 同时把自己的自然（不折行）宽度算进气泡里。
+  toolTitleRow: { flexGrow: 1, flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.s2 },
+  toolTitle: { flexShrink: 1, color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
+  // 状态区永不压缩：压缩了就会出现「对勾贴到文字上」
+  toolStateRow: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
   toolState: { color: colors.textMuted, fontSize: fontSize.caption },
   toolOutput: { maxHeight: 220, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 11, color: colors.textSecondary, backgroundColor: colors.codeSurface, fontSize: fontSize.caption, lineHeight: 18 },
 });

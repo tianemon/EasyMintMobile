@@ -45,6 +45,89 @@ function Glyph({ size, color, viewBox = '0 0 24 24', strokeWidth = 2, strokeOpac
     strokeOpacity={strokeOpacity} strokeLinecap="round" strokeLinejoin="round">{children}</Svg>;
 }
 
+// ── 模型图标（PC ModelGlyph.tsx + index.css 的 model-glyph-* 的 1:1 复刻）────────
+
+/**
+ * 三个节点：**只有 a 实心**，b / c 是空心描边。
+ * 这是与 PC 最容易被漏掉的一处差异（曾把三个都画成实心）。
+ */
+const GLYPH_NODES = [
+  { cx: 5, cy: 12, filled: true },
+  { cx: 19, cy: 5.5, filled: false },
+  { cx: 19, cy: 18.5, filled: false },
+] as const;
+/** 三条连线，d 取 PC 原文 */
+const GLYPH_EDGES = ['M7.4 10.9 16.6 6.6', 'M7.4 13.1 16.6 17.4', 'M19 8.1v7.8'] as const;
+const GLYPH_NODE_R = 2.6;
+const GLYPH_STROKE = 2;
+/** 聚拢动画的三角形中心与收缩比（PC 的位移量就是由这两个数推出来的） */
+const GLYPH_CENTER = { x: 14.33, y: 12 };
+const GLYPH_GATHER = 0.45;
+/** 单程时长；往返一个循环 2.4s，对齐 PC 的 `2.4s ease-in-out infinite` */
+const GLYPH_HALF_CYCLE_MS = 1200;
+/** 绘图用的 24 视图盒边长（外层容器是 size 见方，两者比就是缩放比） */
+const GLYPH_VIEWBOX = 24;
+
+/**
+ * 模型图标（三点互联 + 连线）：输入卡的模型标签与状态行共用，与 PC 同一套几何。
+ *
+ * `animated` 只有状态行要（输入卡的标签保持静态，避免与状态行同时动）。
+ * 动画在这边不能用 react-native-svg 的 props 走原生驱动（cx/cy 不是 style 属性，只能用 JS 驱动，
+ * 而流式期间 JS 线程本来就满），所以拆成三个绝对定位的 Animated.View 各自平移 +
+ * 一层连线整体缩放 —— 位移量与连线缩放都走 transform，能开 useNativeDriver，不占 JS 线程。
+ */
+export function ModelGlyph({ size = 15, color = colors.textMuted, animated = false }: { size?: number; color?: string; animated?: boolean }) {
+  const nodes = GLYPH_NODES.map((node) => <Circle key={`${node.cx}-${node.cy}`} cx={node.cx} cy={node.cy} r={GLYPH_NODE_R}
+    fill={node.filled ? color : 'none'} />);
+  const edges = GLYPH_EDGES.map((d) => <Path key={d} d={d} />);
+  const box = { width: size, height: size } as const;
+  const svgProps = { viewBox: `0 0 ${GLYPH_VIEWBOX} ${GLYPH_VIEWBOX}`, fill: 'none', stroke: color, strokeWidth: GLYPH_STROKE, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+
+  if (!animated) return <Svg width={size} height={size} {...svgProps}>{nodes}{edges}</Svg>;
+  return <AnimatedModelGlyph size={size} box={box} svgProps={svgProps} nodes={nodes} edges={edges} />;
+}
+
+type GlyphSvgProps = { viewBox: string; fill: string; stroke: string; strokeWidth: number; strokeLinecap: 'round'; strokeLinejoin: 'round' };
+
+function AnimatedModelGlyph({ size, box, svgProps, nodes, edges }: {
+  size: number; box: { width: number; height: number }; svgProps: GlyphSvgProps; nodes: ReactNode; edges: ReactNode;
+}) {
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(progress, { toValue: 1, duration: GLYPH_HALF_CYCLE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(progress, { toValue: 0, duration: GLYPH_HALF_CYCLE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [progress]);
+
+  // 视图坐标 → 屏幕像素（Svg 画在 24 视图盒里，外层容器只有 size 见方）
+  const k = size / GLYPH_VIEWBOX;
+  return <View style={box}>
+    {/* 连线层：以三角形中心为原点整体缩到 45%，端点自然跟着节点走（同 PC 的 .model-glyph-edge） */}
+    <Animated.View style={[glyphLayer, box, {
+      transformOrigin: `${GLYPH_CENTER.x * k}px ${GLYPH_CENTER.y * k}px`,
+      transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, GLYPH_GATHER] }) }],
+    }]}>
+      <Svg width={size} height={size} {...svgProps}>{edges}</Svg>
+    </Animated.View>
+    {GLYPH_NODES.map((node, index) => (
+      <Animated.View key={`${node.cx}-${node.cy}`} style={[glyphLayer, box, {
+        transform: [
+          { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, (GLYPH_CENTER.x - node.cx) * (1 - GLYPH_GATHER) * k] }) },
+          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, (GLYPH_CENTER.y - node.cy) * (1 - GLYPH_GATHER) * k] }) },
+        ],
+      }]}>
+        <Svg width={size} height={size} {...svgProps}>{(nodes as ReactNode[])[index]}</Svg>
+      </Animated.View>
+    ))}
+  </View>;
+}
+
+/** 动画分层容器：每层都是 size 见方的绝对定位层，各自做 transform（不吃 StyleSheet——本文件无样式表） */
+const glyphLayer = { position: 'absolute', left: 0, top: 0 } as const;
+
 // ── 形状数据（24 视图盒 / 16 视图盒，抄自 PC）────────────────
 
 /** 大脑（Lucide brain）：思考块标识，与输入卡思考等级图标同源 */
@@ -260,10 +343,7 @@ export function ToolIcon({ name, size = iconSize.tool, color = colors.toolTitle 
 /** 输入卡工具栏图标：模型 / 权限 / 思考等级 */
 export function ComposerIcon({ kind, permission }: { kind: 'model' | 'permission' | 'thinking'; permission?: PermissionMode }) {
   const color = kind === 'permission' && permission === 'full' ? colors.permissionOn : colors.textMuted;
-  if (kind === 'model') return <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Circle cx={5} cy={12} r={2.6} fill={color} /><Circle cx={19} cy={5.5} r={2.6} fill={color} /><Circle cx={19} cy={18.5} r={2.6} fill={color} />
-    <Path d="M7.4 10.9 16.6 6.6" /><Path d="M7.4 13.1 16.6 17.4" /><Path d="M19 8.1v7.8" />
-  </Svg>;
+  if (kind === 'model') return <ModelGlyph size={15} color={color} />;
   if (kind === 'permission') return <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
     <Path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
     {permission === 'full' ? <><Path d="M12 8v4" /><Path d="M12 16h.01" /></> : permission === 'readonly' ? <><Rect x={9} y={11} width={6} height={5} rx={1} /><Path d="M10.5 11V9.5a1.5 1.5 0 0 1 3 0V11" /></> : <Path d="m9 12 2 2 4-4" />}

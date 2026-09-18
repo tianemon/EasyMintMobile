@@ -49,7 +49,7 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [session, setSession] = useState<SessionListItem | null>(null);
   const [chatOrigin, setChatOrigin] = useState<'home' | 'sessions'>('home');
-  // 列表顺序与 MessageList 的 inverted 一致：**最新在前**，插入/替换就地做，避免每帧 reverse 整个数组
+  // inverted 列表使用「最新在前」，插入/替换就地做，避免每帧 reverse 整个数组
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [running, setRunning] = useState(false);
@@ -262,9 +262,9 @@ export default function App() {
 
   const composer: ComposerProps = useMemo(() => ({
     draft, running, hasSession: !!session, permission, permissionLabel, thinking, thinkingOptions, model,
-    provider: activeModelProvider, contextPercent: contextUsage.percent, control: composerControl,
+    provider: activeModelProvider, contextPercent: contextUsage.percent, contextWindow: contextUsage.maxTokens ?? null, control: composerControl,
     ...composerHandlers,
-  }), [activeModelProvider, composerControl, composerHandlers, contextUsage.percent, draft, model, permission,
+  }), [activeModelProvider, composerControl, composerHandlers, contextUsage.maxTokens, contextUsage.percent, draft, model, permission,
     permissionLabel, running, session, thinking, thinkingOptions]);
 
   if (!bootReady) return null;
