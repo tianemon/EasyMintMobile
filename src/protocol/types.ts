@@ -16,6 +16,8 @@ export type CommandName =
   | 'session.rename'
   | 'session.pin'
   | 'session.archive'
+  | 'shell.stop'
+  | 'delegation.stop'
   | 'capability.models';
 
 export interface PairingOffer {
@@ -67,6 +69,8 @@ export interface SessionListItem {
   lastMessage?: string;
   pinnedAt?: number;
   archivedAt?: number;
+  /** PC 侧由 sessionAgentTypes 标记的会话类型（mint/builder/evaluator/designer） */
+  agentType?: string;
 }
 
 export interface PendingAsk {
@@ -96,7 +100,7 @@ export interface SessionSnapshot {
     permissionMode?: PermissionMode;
   };
   status: string;
-  thinking?: { current?: string; available?: string[] };
+  thinking?: { level?: string; available?: string[] };
   pendingAsks: PendingAsk[];
   bufferedEvents: unknown[];
   background?: {

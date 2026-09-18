@@ -137,7 +137,9 @@ export default function App() {
     setRunning(isRunning);
     setMintStatus(isRunning ? '正在处理…' : '');
     setPermission(snapshot.cache?.permissionMode ?? 'standard');
-    setThinking(snapshot.cache?.thinkingLevel ?? snapshot.thinking?.current ?? 'medium');
+    // 会话真实生效等级优先于缓存：PC 同一会话也是以 session.thinkingLevel 为准（缓存只是上次的期望值，
+    // 可能被模型能力裁剪），取不到再回落缓存、再回落 medium
+    setThinking(snapshot.thinking?.level ?? snapshot.cache?.thinkingLevel ?? 'medium');
     const available = snapshot.thinking?.available;
     setThinkingOptions(available?.length ? THINKING_ORDER.filter((level) => available.includes(level)) : [...THINKING_ORDER]);
     setModel(snapshot.cache?.model ?? '');
