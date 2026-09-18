@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import type { ReactNode } from 'react';
 import type { Token, Tokens } from 'marked';
 import { colors, fontSize, space } from '../../theme/tokens';
@@ -26,6 +26,10 @@ type MarkdownViewProps = {
 type Row =
   | { kind: 'code'; language: string; code: string }
   | { kind: 'markdown'; text: string; fade: boolean };
+
+// Android 的原生 selectable Text 点击时会请求把自身移入可见区域；在 inverted
+// FlatList 中该坐标会被反向解释，导致消息列表跳动。iOS 保留系统文本选择。
+const textSelectable = Platform.OS !== 'android';
 
 export const MarkdownView = memo(function MarkdownView({ text, fadeTail }: MarkdownViewProps) {
   const rows = useMemo(() => buildRows(text, !!fadeTail), [text, fadeTail]);
@@ -87,11 +91,11 @@ function renderBlock(token: Token, key: number, fade: boolean, quote: boolean, l
   switch (token.type) {
     case 'paragraph':
     case 'text':
-      return <Text key={key} selectable style={[styles.paragraph, quote && styles.quoteText, last && styles.blockLast]}>
+      return <Text key={key} selectable={textSelectable} style={[styles.paragraph, quote && styles.quoteText, last && styles.blockLast]}>
         <InlineTokens tokens={blockTokens(token)} fade={fade} />
       </Text>;
     case 'heading':
-      return <Text key={key} selectable style={[styles.heading, HEADING_STYLES[Math.min(token.depth, 6) - 1], quote && styles.quoteText, last && styles.blockLast]}>
+      return <Text key={key} selectable={textSelectable} style={[styles.heading, HEADING_STYLES[Math.min(token.depth, 6) - 1], quote && styles.quoteText, last && styles.blockLast]}>
         <InlineTokens tokens={blockTokens(token)} fade={fade} />
       </Text>;
     case 'code':
@@ -106,7 +110,7 @@ function renderBlock(token: Token, key: number, fade: boolean, quote: boolean, l
     case 'hr':
       return <View key={key} style={styles.hr} />;
     case 'html':
-      return <Text key={key} selectable style={[styles.paragraph, quote && styles.quoteText, last && styles.blockLast]}>{token.text}</Text>;
+      return <Text key={key} selectable={textSelectable} style={[styles.paragraph, quote && styles.quoteText, last && styles.blockLast]}>{token.text}</Text>;
     default:
       return 'tokens' in token && token.tokens
         ? <View key={key}>{renderBlocks(token.tokens.filter(isVisible), fade, quote)}</View>

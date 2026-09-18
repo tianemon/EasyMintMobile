@@ -41,7 +41,7 @@ export const CodeBlock = memo(function CodeBlock({ language, code, last }: { lan
     </View>
     {/* 横向滚动：ScrollView 宽度被气泡约束（气泡 maxWidth 兜底），内容再长也只在块内滚，不撑破气泡 */}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-      <Text selectable style={styles.code}>{code}</Text>
+      <Text selectable={Platform.OS !== 'android'} style={styles.code}>{code}</Text>
     </ScrollView>
   </View>;
 });
