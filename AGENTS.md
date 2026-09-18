@@ -9,6 +9,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 - **检查**：`npm run check`（`tsc --noEmit` + `expo-doctor`）
 - **打包**：`npm run apk` → 输出 `apk/EasyMint-{yyyyMMddHHmmss}.apk`（脚本 `scripts/build-apk.mjs`，内部先 `expo prebuild` 再 Gradle）。构建成功后**自动清理旧包，默认只保留最新一个**（新包落盘后才清，构建失败不动已有产物）；要留上一版做对比时传参覆盖：`node scripts/prune-apks.mjs 3`
 - **`android/` 与 `ios/` 是 `expo prebuild` 的产物**（打包脚本每次重建），不入库、不要手改；原生配置写 `app.json`
+- **批量打包后停掉构建守护进程**：Gradle/Kotlin 守护进程会常驻到 3 小时才自动退出。`ps` 里它的 RSS 只有几十 MB，但实际压着 JVM 堆与压缩/换出页——实测连打 5 个包后系统仅剩 74MB 空闲内存，跑 `cd android && ./gradlew --stop` 后回升到 1751MB。长时间不再打包时执行一次
 - **设计 token 单一来源**：`src/theme/tokens.ts`，值镜像桌面端 `app/renderer/src/index.css` 的亮色段。`App.tsx` 与 `src/` 下除 tokens.ts 外不得出现裸色值（hex）
 - **圆角只有两档**：`radius.lg`(8) 与 `radius.full`（全站统一，不要再引入中间档）
 - **品牌图标**：`assets/brand/appicon.png` / `appicon-light.png` 复制自桌面端 `assets/`，桌面端换图标时需同步
