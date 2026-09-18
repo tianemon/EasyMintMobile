@@ -13,6 +13,11 @@
  * 应用」，不会出现旧快照盖掉新状态。
  *
  * 调度契约：`schedule` 必须在下一帧**异步**调用 flush（rAF / 定时器），不支持同步回调。
+ *
+ * 调度可靠性：`scheduleOnNextFrame` 同时挂 rAF 与定时器，谁先到谁 flush。**不能只靠 rAF**——
+ * RN 的 rAF 由显示刷新信号驱动（iOS RCTTiming 走 CADisplayLink、Android JavaTimerManager 走
+ * Choreographer 帧回调），UI 线程被重活占满时帧回调会被挤掉，而定时器走原生定时器队列、与 vsync
+ * 无关。只挂 rAF 时「挤掉一次 = 待应用帧一直不落地」，表现为流式输出中途定住。
  */
 
 export type FrameScheduler = (flush: () => void) => () => void;
@@ -57,12 +62,25 @@ export function createStreamFrameQueue<T>(apply: (frame: T) => void, schedule: F
   };
 }
 
-/** 下一帧边界应用：rAF 优先，宿主没有 rAF 时回落一个 16ms 定时器 */
+/** 定时器兜底的等待时长：比一帧（16ms）长，正常情况几乎总由 rAF 先到，只在帧回调被挤掉时兜底 */
+const FALLBACK_MS = 100;
+
+/** 下一帧边界应用：rAF 与定时器并行挂上，谁先到谁 flush（另一个立刻取消，不会重复应用） */
 export function scheduleOnNextFrame(flush: () => void): () => void {
-  if (typeof requestAnimationFrame === 'function') {
-    const handle = requestAnimationFrame(() => flush());
-    return () => cancelAnimationFrame(handle);
-  }
-  const handle = setTimeout(flush, 16);
-  return () => clearTimeout(handle);
+  let rafHandle: number | null = null;
+  let timerHandle: ReturnType<typeof setTimeout> | null = null;
+  const fire = (): void => {
+    if (rafHandle !== null) { cancelAnimationFrame(rafHandle); rafHandle = null; }
+    if (timerHandle !== null) { clearTimeout(timerHandle); timerHandle = null; }
+    flush();
+  };
+  if (typeof requestAnimationFrame === 'function') rafHandle = requestAnimationFrame(fire);
+  timerHandle = setTimeout(fire, FALLBACK_MS);
+  // 取消时两条路径都要清：漏掉定时器会让已作废的 flush 晚到一次（内容虽会收敛，但白跑一遍渲染）
+  return () => {
+    if (rafHandle !== null) cancelAnimationFrame(rafHandle);
+    if (timerHandle !== null) clearTimeout(timerHandle);
+    rafHandle = null;
+    timerHandle = null;
+  };
 }
