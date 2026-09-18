@@ -1,6 +1,7 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import type { ListRenderItemInfo } from 'react-native';
+import { mergeAssistantRuns } from '../session/messages';
 import type { DisplayMessage } from '../session/messages';
 import { colors, fontSize, radius } from '../theme/tokens';
 import { MarkdownView } from './markdown/MarkdownView';
@@ -49,6 +50,7 @@ const maintainVisibleContentPosition = { minIndexForVisible: 0, autoscrollToTopT
  * 不会被新内容拉回。它不是 VirtualizedList 的默认行为，不能删掉后依赖隐式锚定。
  */
 export const MessageList = memo(function MessageList({ messages }: MessageListProps) {
+  const displayMessages = useMemo(() => mergeAssistantRuns(messages), [messages]);
   const [innerScrollGesture, setInnerScrollGesture] = useState(false);
   const setInnerGesture = useCallback((active: boolean): void => setInnerScrollGesture(active), []);
   const renderRow = useCallback(({ item }: ListRenderItemInfo<DisplayMessage>) =>
@@ -56,7 +58,7 @@ export const MessageList = memo(function MessageList({ messages }: MessageListPr
 
   return <View style={styles.wrap}>
     <FlatList
-      data={messages}
+      data={displayMessages}
       renderItem={renderRow}
       keyExtractor={keyExtractor}
       style={styles.wrap}

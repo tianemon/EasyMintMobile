@@ -20,6 +20,27 @@ export type DisplayMessage = {
   attachments?: DraftAttachment[];
 };
 
+/**
+ * Pi 会把同一回合的「思考 → 工具 → 工具 → 正文」拆成多条 assistant 记录。
+ * 桌面端按回合显示在同一气泡；手机端也在渲染前合并，避免每个工具都叠加一层气泡内边距和行距。
+ * 输入为最新在前，块内容仍需保持时间正序。
+ */
+export function mergeAssistantRuns(list: DisplayMessage[]): DisplayMessage[] {
+  const merged: DisplayMessage[] = [];
+  for (const message of list) {
+    const latest = merged[merged.length - 1];
+    if (message.role === 'assistant' && latest?.role === 'assistant') {
+      merged[merged.length - 1] = {
+        ...latest,
+        id: `${latest.id}+${message.id}`,
+        blocks: [...(message.blocks ?? []), ...(latest.blocks ?? [])],
+        streaming: !!latest.streaming || !!message.streaming,
+      };
+    } else merged.push(message);
+  }
+  return merged;
+}
+
 /** 新消息插到列表头部（inverted 列表：最新在前） */
 export function prependMessage(list: DisplayMessage[], message: DisplayMessage): DisplayMessage[] {
   return [message, ...list];

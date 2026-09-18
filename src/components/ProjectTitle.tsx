@@ -18,12 +18,11 @@ export function ProjectTitle({ name, status, onPress }: ProjectTitleProps) {
   </Pressable>;
 }
 
-/** 标题栏右侧的电脑连接指示（灯 + PC 字样） */
+/** 标题栏右侧的电脑连接指示灯 */
 export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
   const label = status === 'connected' ? '电脑已连接' : status === 'connecting' ? '正在连接电脑' : '电脑已断开';
   return <View accessibilityLabel={label} style={styles.connectionIndicator}>
     <View style={[styles.connectionLight, status === 'connected' ? styles.connectionLightOn : status === 'connecting' ? styles.connectionLightPending : styles.connectionLightOff]} />
-    <Text style={styles.connectionLabel}>{status === 'connected' ? 'PC' : 'PC'}</Text>
   </View>;
 }
 
@@ -31,10 +30,9 @@ const styles = StyleSheet.create({
   projectTitleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, maxWidth: '100%' },
   projectTitleText: { flexShrink: 1, color: colors.textPrimary, fontWeight: '700', fontSize: fontSize.title },
   titleStatusLight: { width: space.s2, height: space.s2, borderRadius: radius.full },
-  connectionIndicator: { minWidth: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5 },
+  connectionIndicator: { minWidth: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   connectionLight: { width: 9, height: 9, borderRadius: radius.full },
   connectionLightOn: { backgroundColor: colors.accent },
   connectionLightPending: { backgroundColor: colors.warning },
   connectionLightOff: { backgroundColor: colors.dotGray },
-  connectionLabel: { color: colors.textMuted, fontSize: fontSize.ui11, fontWeight: '700' },
 });

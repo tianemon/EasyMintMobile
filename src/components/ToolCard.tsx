@@ -28,7 +28,8 @@ export function ToolCard({ tool }: ToolCardProps) {
 }
 
 const styles = StyleSheet.create({
-  toolCard: { marginVertical: 3, alignSelf: 'stretch', borderRadius: radius.lg, backgroundColor: colors.cmdBox, overflow: 'hidden' },
+  // 与 PC 工具块统一为 mt-1.5/mb-1；同一回合的连续工具已合并进一个 assistant 气泡。
+  toolCard: { marginTop: 6, marginBottom: 4, alignSelf: 'stretch', borderRadius: radius.lg, backgroundColor: colors.cmdBox, overflow: 'hidden' },
   toolCardError: { backgroundColor: colors.dangerBg },
   toolHeader: { minHeight: 40, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
   // ⚠ 不能用 `flex: 1`（= flexBasis: 0）：气泡是按内容撑开的（alignSelf: flex-start），
