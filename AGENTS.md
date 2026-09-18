@@ -7,7 +7,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 本仓库是 EasyMint 手机端（局域网终端 App），2026-09-18 从 EasyMint 桌面端主仓库迁出为独立仓库。桌面端在 `~/dev/project/EasyMint`，两端通过加密 WebSocket 通信，改动远程协议时需两边同步。
 
 - **检查**：`npm run check`（`tsc --noEmit` + `expo-doctor`）
-- **打包**：`npm run apk` → 输出 `apk/EasyMint-{yyyy-MM-dd.sss}.apk`（脚本 `scripts/build-apk.mjs`，内部先 `expo prebuild` 再 Gradle）
+- **打包**：`npm run apk` → 输出 `apk/EasyMint-{yyyy-MM-dd.sss}.apk`（脚本 `scripts/build-apk.mjs`，内部先 `expo prebuild` 再 Gradle）。构建成功后**自动清理旧包，默认保留最近 3 个**（新包落盘后才清，构建失败不动已有产物）；只想清包不重新构建时跑 `node scripts/prune-apks.mjs [保留个数]`
 - **`android/` 与 `ios/` 是 `expo prebuild` 的产物**（打包脚本每次重建），不入库、不要手改；原生配置写 `app.json`
 - **设计 token 单一来源**：`src/theme/tokens.ts`，值镜像桌面端 `app/renderer/src/index.css` 的亮色段。`App.tsx` 与 `src/` 下除 tokens.ts 外不得出现裸色值（hex）
 - **圆角只有两档**：`radius.lg`(8) 与 `radius.full`（全站统一，不要再引入中间档）

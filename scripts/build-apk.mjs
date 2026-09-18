@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
+import { DEFAULT_KEEP_COUNT, pruneOldApks } from './prune-apks.mjs';
 
 // 本仓库即移动端工程根（2026-09-18 起从 EasyMint 主仓库迁出为独立仓库）。
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,6 +51,10 @@ const output = join(outputDir, `EasyMint-${stamp}.apk`);
 mkdirSync(outputDir, { recursive: true });
 copyFileSync(source, output);
 
+// 新包落盘后才清理旧包——构建失败时不动已有产物。
+const pruned = pruneOldApks(outputDir, DEFAULT_KEEP_COUNT);
+
 const sha256 = createHash('sha256').update(readFileSync(output)).digest('hex');
 console.log(`\nAPK: ${output}`);
 console.log(`SHA-256: ${sha256}`);
+if (pruned.length > 0) console.log(`已清理旧包 ${pruned.length} 个（保留最近 ${DEFAULT_KEEP_COUNT} 个）：${pruned.join(', ')}`);
