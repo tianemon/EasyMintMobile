@@ -35,14 +35,14 @@ yarn-error.*
 
 # 打包产物
 /apk/*.apk
+/ipa/*.ipa
 *.pem
+
+# 本地助手的工作目录（项目记忆、日志），不入库
+.workbuddy/
 
 # local env files
 .env*.local
 
 # typescript
 *.tsbuildinfo
-
-# generated native folders
-/ios
-/android
