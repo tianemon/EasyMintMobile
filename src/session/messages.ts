@@ -1,4 +1,5 @@
 import type { SessionSnapshot } from '../protocol/types';
+import type { DraftAttachment } from './attachments';
 
 /** 气泡内的一块内容：正文 / 思考 / 工具调用 */
 export type DisplayBlock =
@@ -16,6 +17,7 @@ export type DisplayMessage = {
   blocks?: DisplayBlock[];
   streaming?: boolean;
   systemKind?: string;
+  attachments?: DraftAttachment[];
 };
 
 /** 新消息插到列表头部（inverted 列表：最新在前） */

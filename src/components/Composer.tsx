@@ -1,7 +1,8 @@
 import { memo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import type { ModelCapabilities, PermissionMode } from '../protocol/types';
+import type { AttachmentKind, DraftAttachment } from '../session/attachments';
 import { THINKING_LABELS } from '../session/thinking';
 import { commonStyles } from '../theme/commonStyles';
 import { colors, fontSize, radius, shadow, space } from '../theme/tokens';
@@ -25,6 +26,7 @@ export type ComposerProps = {
   /** 上下文窗口大小（token）；未知时悬浮只报百分比 */
   contextWindow: number | null;
   control: ComposerControl;
+  attachments: DraftAttachment[];
   onDraftChange: (value: string) => void;
   onControlChange: (control: ComposerControl) => void;
   onSend: () => void;
@@ -32,6 +34,8 @@ export type ComposerProps = {
   onSelectModel: (modelId: string, providerId: string | undefined) => void;
   onSelectPermission: (mode: PermissionMode) => void;
   onSelectThinking: (level: string) => void;
+  onPickAttachments: (kind: AttachmentKind) => void;
+  onRemoveAttachment: (id: string) => void;
 };
 
 const PERMISSION_OPTIONS = [['readonly', '只读'], ['standard', '标准'], ['full', '完全访问']] as const;
@@ -63,18 +67,37 @@ function formatTokenWindow(tokens: number): string {
  * memo：流式期间 App 每帧重渲染，props 未变时跳过整块输入卡（调用方需传稳定 props，见 App 的 composer）。
  */
 export const Composer = memo(function Composer(props: ComposerProps) {
-  const { draft, running, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, contextWindow, control } = props;
+  const { draft, running, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, contextWindow, control, attachments } = props;
   const [showContextTip, setShowContextTip] = useState(false);
   const contextTipText = contextTip(contextPercent, contextWindow);
-  const sendDisabled = running && !hasSession ? true : (!running && !draft.trim());
+  const sendDisabled = running && !hasSession ? true : (!running && !draft.trim() && attachments.length === 0);
+  const openAttachmentMenu = () => Alert.alert('添加附件', undefined, [
+    { text: '图片', onPress: () => props.onPickAttachments('image') },
+    { text: '文档', onPress: () => props.onPickAttachments('doc') },
+    { text: '取消', style: 'cancel' },
+  ]);
   return <View style={[styles.composerCard, shadow.sm]}>
+    {!!attachments.length && <View style={styles.attachmentPreview}>{attachments.map((attachment) => <View key={attachment.id} style={styles.attachmentItem}>
+      {attachment.kind === 'image'
+        ? <Image source={{ uri: `data:${attachment.mimeType};base64,${attachment.data}` }} style={styles.attachmentImage} resizeMode="contain" />
+        : <Text numberOfLines={2} style={styles.attachmentName}>{attachment.name}</Text>}
+      <Pressable accessibilityLabel={`移除 ${attachment.name}`} onPress={() => props.onRemoveAttachment(attachment.id)} style={styles.attachmentRemove}>
+        <Icon name="cross" size={10} color={colors.textSecondary} />
+      </Pressable>
+    </View>)}</View>}
     <TextInput value={draft} onChangeText={props.onDraftChange} placeholder={running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'} multiline style={styles.composerInput} />
     <View style={styles.composerToolbar}>
-      <Pressable accessibilityLabel={`选择模型，当前 ${model || provider?.currentModel || '默认'}`} style={[styles.composerIconButton, control === 'model' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'model' ? null : 'model')}>
-        <ComposerIcon kind="model" />
+      <Pressable accessibilityLabel="添加附件" style={styles.composerIconButton} onPress={openAttachmentMenu}>
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+        </Svg>
       </Pressable>
+      <View style={styles.toolbarSpacer} />
       <Pressable accessibilityLabel={`选择权限，当前 ${permissionLabel}`} style={[styles.composerIconButton, control === 'permission' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'permission' ? null : 'permission')}>
         <ComposerIcon kind="permission" permission={permission} />
+      </Pressable>
+      <Pressable accessibilityLabel={`选择模型，当前 ${model || provider?.currentModel || '默认'}`} style={[styles.composerIconButton, control === 'model' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'model' ? null : 'model')}>
+        <ComposerIcon kind="model" />
       </Pressable>
       <Pressable accessibilityLabel={`选择思考等级，当前 ${THINKING_LABELS[thinking] ?? thinking}`} style={[styles.composerIconButton, control === 'thinking' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'thinking' ? null : 'thinking')}>
         <ComposerIcon kind="thinking" />
@@ -116,7 +139,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
 const styles = StyleSheet.create({
   composerCard: { margin: space.s4, marginTop: 6, marginBottom: 26, padding: space.s1, borderRadius: radius.lg, backgroundColor: colors.elevated },
   composerInput: { minHeight: 52, maxHeight: 130, paddingHorizontal: space.s3, paddingTop: 10, paddingBottom: 6, color: colors.textPrimary, fontSize: fontSize.base, lineHeight: 22, textAlignVertical: 'top' },
-  composerToolbar: { minHeight: 38, paddingLeft: space.s1, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  composerToolbar: { minHeight: 38, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  toolbarSpacer: { flex: 1 },
   composerIconButton: { width: 26, height: 26, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   composerControlActive: { backgroundColor: colors.surfaceHover },
   contextUsage: { marginLeft: 2, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
@@ -125,7 +149,7 @@ const styles = StyleSheet.create({
   // 锚在左侧向右生长：圆环左边只剩约 100px，靠右锚定会把文字撩出屏幕外
   contextTip: { position: 'absolute', bottom: 32, left: -8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.elevated, ...shadow.sm },
   contextTipText: { color: colors.textPrimary, fontSize: fontSize.caption, fontWeight: '600' },
-  sendButton: { marginLeft: 'auto', marginRight: 10, width: 32, height: 32, borderRadius: radius.lg, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  sendButton: { marginLeft: 2, marginRight: 6, width: 32, height: 32, borderRadius: radius.lg, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   stopButton: { backgroundColor: colors.dangerBg },
   sendButtonText: { color: colors.textInverse, fontSize: fontSize.title, lineHeight: 18, fontWeight: '800' },
   composerMenu: { margin: space.s1, marginTop: 2, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.divider, paddingTop: space.s1, maxHeight: 200 },
@@ -134,4 +158,9 @@ const styles = StyleSheet.create({
   composerOptionText: { color: colors.textPrimary, fontSize: fontSize.body },
   modelRow: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.elevated, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   selectedRow: { backgroundColor: colors.selectedRowBg, borderWidth: 1, borderColor: colors.selectedRowBorder },
+  attachmentPreview: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.s2, paddingTop: space.s2 },
+  attachmentItem: { width: 58, height: 58, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  attachmentImage: { width: 58, height: 58 },
+  attachmentName: { padding: 5, color: colors.textPrimary, fontSize: fontSize.ui11, textAlign: 'center' },
+  attachmentRemove: { position: 'absolute', top: 0, right: 0, width: 20, height: 20, borderBottomLeftRadius: radius.lg, backgroundColor: colors.elevated, alignItems: 'center', justifyContent: 'center' },
 });

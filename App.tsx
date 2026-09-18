@@ -22,6 +22,8 @@ import { SessionsScreen } from './src/screens/SessionsScreen';
 import { clearCredential, loadCredential, saveCredential } from './src/security/credential-store';
 import { snapshotMessages } from './src/session/messages';
 import type { DisplayMessage } from './src/session/messages';
+import { MAX_TOTAL_ATTACHMENT_BYTES, pickAttachments } from './src/session/attachments';
+import type { AttachmentKind, DraftAttachment } from './src/session/attachments';
 import { THINKING_ORDER, resolveThinkingLevel } from './src/session/thinking';
 import { useRemoteEvents } from './src/session/useRemoteEvents';
 import type { RemoteEventsStore } from './src/session/useRemoteEvents';
@@ -52,6 +54,7 @@ export default function App() {
   // inverted 列表使用「最新在前」，插入/替换就地做，避免每帧 reverse 整个数组
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
   const [running, setRunning] = useState(false);
   const [mintStatus, setMintStatus] = useState('');
   const [backgroundShells, setBackgroundShells] = useState<BackgroundShell[]>([]);
@@ -165,11 +168,11 @@ export default function App() {
   // 两个 store 对象只装 useState 的 setter 与 useCallback 包装（标识都稳定），收进 useMemo：
   // 避免每次 App 渲染新建对象 → 下层 hook 的 useCallback 跟着失效 → 输入卡 props 每帧换代。
   const sessionStore = useMemo<SessionActionsStore>(() => ({
-    setPage, setProject, setBusy, setChatOrigin, setComposerControl, setSession, setSessions, setDraft,
+    setPage, setProject, setBusy, setChatOrigin, setComposerControl, setSession, setSessions, setDraft, setAttachments,
     setMintStatus: updateMintStatus, setRunning, setMessages, setPermission, setThinking, setModel, setProvider, setModels,
     setBackgroundShells, setBackgroundAgents, setPendingAsk, setAskAnswers, setSettingsOpen, setMenuSession, setRenameTitle,
   }), [setAskAnswers, setBackgroundAgents, setBackgroundShells, setBusy, setChatOrigin, setComposerControl, setDraft,
-    setMenuSession, setMessages, setModel, setModels, setPage, setPendingAsk, setPermission, setProject, setProvider,
+    setAttachments, setMenuSession, setMessages, setModel, setModels, setPage, setPendingAsk, setPermission, setProject, setProvider,
     setRenameTitle, setRunning, setSession, setSessions, setSettingsOpen, setThinking, updateMintStatus]);
 
   const remoteStore = useMemo<RemoteEventsStore>(() => ({
@@ -179,7 +182,7 @@ export default function App() {
     setPermission, setProvider, setRunning, setThinking, setThinkingOptions, updateMintStatus]);
 
   const actions = useSessionActions({
-    client, project, session, page, running, draft, permission, thinking, model, provider,
+    client, project, session, page, running, draft, attachments, permission, thinking, model, provider,
     menuSession, renameTitle, pendingAsk, askAnswers, fail, applySnapshot, refreshSessions, store: sessionStore,
   });
 
@@ -258,13 +261,24 @@ export default function App() {
     onSelectModel: (modelId: string, providerId: string | undefined) => void actions.setRemoteSetting('model', modelId, providerId),
     onSelectPermission: (mode: PermissionMode) => void actions.setRemoteSetting('permission', mode),
     onSelectThinking: (level: string) => void actions.setRemoteSetting('thinking', level),
-  }), [actions.send, actions.stop, actions.setRemoteSetting]);
+    onPickAttachments: (kind: AttachmentKind) => void pickAttachments(kind)
+      .then((items) => setAttachments((current) => {
+        const next = [...current, ...items];
+        if (next.reduce((sum, item) => sum + item.size, 0) > MAX_TOTAL_ATTACHMENT_BYTES) {
+          Alert.alert('附件过大', '单次发送的附件总量不能超过 15 MB');
+          return current;
+        }
+        return next;
+      }))
+      .catch(fail),
+    onRemoveAttachment: (id: string) => setAttachments((current) => current.filter((item) => item.id !== id)),
+  }), [actions.send, actions.stop, actions.setRemoteSetting, fail]);
 
   const composer: ComposerProps = useMemo(() => ({
-    draft, running, hasSession: !!session, permission, permissionLabel, thinking, thinkingOptions, model,
+    draft, attachments, running, hasSession: !!session, permission, permissionLabel, thinking, thinkingOptions, model,
     provider: activeModelProvider, contextPercent: contextUsage.percent, contextWindow: contextUsage.maxTokens ?? null, control: composerControl,
     ...composerHandlers,
-  }), [activeModelProvider, composerControl, composerHandlers, contextUsage.maxTokens, contextUsage.percent, draft, model, permission,
+  }), [activeModelProvider, attachments, composerControl, composerHandlers, contextUsage.maxTokens, contextUsage.percent, draft, model, permission,
     permissionLabel, running, session, thinking, thinkingOptions]);
 
   if (!bootReady) return null;

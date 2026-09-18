@@ -1,5 +1,5 @@
 import { memo, useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import type { ListRenderItemInfo } from 'react-native';
 import type { DisplayMessage } from '../session/messages';
 import { colors, fontSize, radius } from '../theme/tokens';
@@ -24,6 +24,10 @@ const styles = StyleSheet.create({
   userBubble: { alignSelf: 'flex-end', backgroundColor: colors.card },
   assistantBubble: { alignSelf: 'flex-start', backgroundColor: colors.cardAgent },
   bubbleText: { color: colors.textPrimary, fontSize: fontSize.base, lineHeight: 22 },
+  attachments: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  attachmentImage: { width: 92, height: 92, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt },
+  attachmentDoc: { width: 92, minHeight: 52, padding: 8, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center' },
+  attachmentName: { color: colors.textPrimary, fontSize: fontSize.caption, textAlign: 'center' },
 });
 
 type MessageListProps = { messages: DisplayMessage[] };
@@ -81,7 +85,13 @@ const MessageRow = memo(function MessageRow({ message, onInnerScrollGesture }: {
   if (message.role === 'system') return <View style={styles.row}><SystemCard message={message} /></View>;
   if (message.role === 'user') {
     return <View style={styles.row}>
-      <View style={[styles.bubble, styles.userBubble]}><Text selectable style={styles.bubbleText}>{message.text}</Text></View>
+      <View style={[styles.bubble, styles.userBubble]}>
+        {!!message.attachments?.length && <View style={styles.attachments}>{message.attachments.map((attachment) =>
+          attachment.kind === 'image'
+            ? <Image key={attachment.id} source={{ uri: `data:${attachment.mimeType};base64,${attachment.data}` }} style={styles.attachmentImage} resizeMode="contain" />
+            : <View key={attachment.id} style={styles.attachmentDoc}><Text numberOfLines={2} style={styles.attachmentName}>{attachment.name}</Text></View>)}</View>}
+        {!!message.text && <Text selectable={Platform.OS !== 'android'} style={styles.bubbleText}>{message.text}</Text>}
+      </View>
     </View>;
   }
   return <View style={styles.row}>

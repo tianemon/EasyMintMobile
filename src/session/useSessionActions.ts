@@ -7,6 +7,7 @@ import type {
   SessionListItem, SessionSnapshot,
 } from '../protocol/types';
 import type { ComposerControl, Page } from '../types';
+import type { DraftAttachment } from './attachments';
 import { prependMessage } from './messages';
 import type { DisplayMessage } from './messages';
 
@@ -20,6 +21,7 @@ export type SessionActionsStore = {
   setSession: (session: SessionListItem | null) => void;
   setSessions: Dispatch<SetStateAction<SessionListItem[]>>;
   setDraft: (value: string) => void;
+  setAttachments: Dispatch<SetStateAction<DraftAttachment[]>>;
   setMintStatus: (value: string) => void;
   setRunning: (value: boolean) => void;
   setMessages: Dispatch<SetStateAction<DisplayMessage[]>>;
@@ -44,6 +46,7 @@ export type SessionActionsOptions = {
   page: Page;
   running: boolean;
   draft: string;
+  attachments: DraftAttachment[];
   permission: PermissionMode;
   thinking: string;
   model: string;
@@ -73,7 +76,7 @@ export type SessionActions = {
 /** 会话级命令（打开/新建/发送/中止/设置/问答/重命名/置顶/归档），全部走 RemoteClient.command */
 export function useSessionActions(options: SessionActionsOptions): SessionActions {
   const {
-    client, project, session, page, running, draft, permission, thinking, model, provider,
+    client, project, session, page, running, draft, attachments, permission, thinking, model, provider,
     menuSession, renameTitle, pendingAsk, askAnswers, fail, applySnapshot, refreshSessions, store,
   } = options;
 
@@ -82,6 +85,7 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     try {
       store.setBusy(true);
       store.setComposerControl(null);
+      store.setAttachments([]);
       const [snapshot, capabilities] = await Promise.all([
         client.command<SessionSnapshot>('session.snapshot', { projectId: selectedProject.id, sessionId: selected.sessionId }),
         client.command<ModelCapabilities>('capability.models'),
@@ -97,36 +101,39 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
         client.command<{ permissionMode: PermissionMode; thinkingLevel: string; model?: string }>('session.create', { projectId: project.id }),
         client.command<ModelCapabilities>('capability.models'),
       ]);
-      store.setComposerControl(null); store.setChatOrigin(page === 'home' ? 'home' : 'sessions'); store.setSession(null); store.setMessages([]); store.setPermission(defaults.permissionMode);
+      store.setComposerControl(null); store.setAttachments([]); store.setChatOrigin(page === 'home' ? 'home' : 'sessions'); store.setSession(null); store.setMessages([]); store.setPermission(defaults.permissionMode);
       store.setThinking(defaults.thinkingLevel); store.setModel(defaults.model ?? '');
       store.setModels(capabilities); store.setPage('chat'); store.setMintStatus(''); store.setBackgroundShells([]); store.setBackgroundAgents([]);
     } catch (e) { fail(e); }
   }, [client, fail, page, project, store]);
 
   const send = useCallback(async () => {
-    if (!client || !project || !draft.trim()) return;
+    if (!client || !project || (!draft.trim() && attachments.length === 0)) return;
     const text = draft.trim();
+    const outgoingAttachments = attachments;
     store.setDraft('');
+    store.setAttachments([]);
     store.setMintStatus('等待模型响应…');
-    store.setMessages((current) => prependMessage(current, { id: `local-${Date.now()}`, role: 'user', text }));
+    store.setMessages((current) => prependMessage(current, { id: `local-${Date.now()}`, role: 'user', text, attachments: outgoingAttachments }));
     try {
+      const remoteAttachments = outgoingAttachments.map(({ name, kind, mimeType, data }) => ({ name, kind, mimeType, data }));
       if (session && running) {
-        await client.command('session.steer', { projectId: project.id, sessionId: session.sessionId, data: { text } });
+        await client.command('session.steer', { projectId: project.id, sessionId: session.sessionId, data: { text, attachments: remoteAttachments } });
       } else {
         const result = await client.command<{ sessionId: string }>('session.send', {
           projectId: project.id, sessionId: session?.sessionId,
-          data: { text, permissionMode: permission, thinkingLevel: thinking,
+          data: { text, attachments: remoteAttachments, permissionMode: permission, thinkingLevel: thinking,
             ...(model ? { model } : {}), ...(provider ? { provider } : {}) },
         });
         if (!session) {
-          const created = { sessionId: result.sessionId, title: text.slice(0, 30), createdAt: Date.now(), updatedAt: Date.now() };
+          const created = { sessionId: result.sessionId, title: text.slice(0, 30) || outgoingAttachments[0]?.name || '附件', createdAt: Date.now(), updatedAt: Date.now() };
           store.setSession(created);
           store.setSessions((current) => current.some((item) => item.sessionId === result.sessionId) ? current : [created, ...current]);
         }
         store.setRunning(true);
       }
     } catch (e) { store.setMintStatus(''); fail(e); }
-  }, [client, draft, fail, model, permission, project, provider, running, session, store, thinking]);
+  }, [attachments, client, draft, fail, model, permission, project, provider, running, session, store, thinking]);
 
   const stop = useCallback(async () => {
     if (!client || !project || !session) return;
