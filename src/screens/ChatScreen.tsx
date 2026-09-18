@@ -3,6 +3,7 @@ import { AskCard } from '../components/AskCard';
 import { BackgroundPills } from '../components/BackgroundPills';
 import { Composer } from '../components/Composer';
 import type { ComposerProps } from '../components/Composer';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Header } from '../components/Header';
 import { ComposerIcon } from '../components/icons';
 import { MessageList } from '../components/MessageList';
@@ -34,7 +35,8 @@ type ChatScreenProps = {
 export function ChatScreen(props: ChatScreenProps) {
   return <KeyboardAvoidingView style={commonStyles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
     <Header title={props.title} onBack={props.onBack} right={<ConnectionIndicator status={props.connection} />} />
-    <MessageList messages={props.messages} />
+    {/* 定位期临时：消息区渲染异常直接画在屏幕上，不留空白（排查完可移除边界） */}
+    <ErrorBoundary label="消息区渲染出错"><MessageList messages={props.messages} /></ErrorBoundary>
     {!!props.pendingAsk && <AskCard ask={props.pendingAsk} answers={props.answers} onAnswerChange={props.onAnswerChange} onSubmit={props.onAnswerSubmit} />}
     <BackgroundPills shells={props.backgroundShells} agents={props.backgroundAgents} />
     {props.running && !!props.mintStatus && <MintStatus text={props.mintStatus} />}

@@ -1,6 +1,6 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
-import type { ListRenderItemInfo } from 'react-native';
+import type { LayoutChangeEvent, ListRenderItemInfo } from 'react-native';
 import type { DisplayMessage } from '../session/messages';
 import { colors, fontSize, radius } from '../theme/tokens';
 import { MarkdownView } from './markdown/MarkdownView';
@@ -9,6 +9,9 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCard } from './ToolCard';
 
 const styles = StyleSheet.create({
+  wrap: { flex: 1 },
+  // 定位期临时样式（消息区异常排查完移除）
+  debug: { paddingHorizontal: 8, paddingBottom: 4, color: '#1a1a1a', backgroundColor: '#ffe58f', fontSize: 10 },
   chatList: { padding: 14, gap: 12, flexGrow: 1, justifyContent: 'flex-start' },
   bubble: { maxWidth: '88%', padding: 13, borderRadius: radius.lg },
   userBubble: { alignSelf: 'flex-end', backgroundColor: colors.card },
@@ -27,11 +30,29 @@ const renderItem = ({ item }: ListRenderItemInfo<DisplayMessage>) => <MessageRow
 
 /** 消息流（inverted 列表：数据已是「最新在前」） */
 export const MessageList = memo(function MessageList({ messages }: MessageListProps) {
-  return <FlatList data={messages} keyExtractor={keyExtractor}
-    inverted contentContainerStyle={contentContainerStyle} keyboardShouldPersistTaps="handled"
-    maintainVisibleContentPosition={maintainVisibleContentPosition}
-    renderItem={renderItem} />;
+  // ── 定位期临时诊断（消息区异常排查完移除）───────────────────────────
+  const [contentHeight, setContentHeight] = useState(0);
+  const [viewHeight, setViewHeight] = useState(0);
+  return <View style={styles.wrap} onLayout={(e: LayoutChangeEvent) => setViewHeight(Math.round(e.nativeEvent.layout.height))}>
+    <FlatList data={messages} keyExtractor={keyExtractor}
+      inverted contentContainerStyle={contentContainerStyle} keyboardShouldPersistTaps="handled"
+      maintainVisibleContentPosition={maintainVisibleContentPosition}
+      onContentSizeChange={(_w: number, h: number) => setContentHeight(Math.round(h))}
+      renderItem={renderItem} />
+    <Text style={styles.debug} selectable numberOfLines={3}>
+      {`诊断 消息${messages.length}条 · 内容高${contentHeight} · 视口高${viewHeight} · ${describeMessages(messages)}`}
+    </Text>
+  </View>;
 });
+
+/** 每条消息的角色与块种类（只列前 4 条），用于判断是数据不对还是布局不对 */
+function describeMessages(messages: DisplayMessage[]): string {
+  return messages.slice(0, 4).map((message, index) => {
+    const kinds = message.blocks?.map((block) => block.kind).join('/');
+    const size = message.text ? `t${message.text.length}` : '';
+    return `#${index}${message.role[0]}${kinds ? `(${kinds})` : ''}${size}`;
+  }).join(' ');
+}
 
 /**
  * memo：props 只有该条消息本体。流式帧只替换正在流式的那一条（见 upsertMessage），
