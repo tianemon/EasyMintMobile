@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "EasyMint",
+    "slug": "easymint-mobile",
+    "scheme": "easymint",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/brand/appicon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.easymint.mobile",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "EasyMint 需要连接同一局域网中的电脑。",
+        "NSCameraUsageDescription": "用于扫描 EasyMint 电脑端显示的配对二维码。",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.easymint.mobile",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#C5EAD9",
+        "foregroundImage": "./assets/brand/appicon-light.png"
+      },
+      "softwareKeyboardLayoutMode": "resize",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F4F4F2",
+          "image": "./assets/brand/appicon-light.png",
+          "imageWidth": 112,
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允许 EasyMint 扫描电脑端的配对二维码",
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ]
+  }
+}
