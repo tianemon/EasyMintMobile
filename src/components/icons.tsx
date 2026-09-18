@@ -351,6 +351,18 @@ export function ComposerIcon({ kind, permission }: { kind: 'model' | 'permission
   return <Glyph size={15} color={color}>{BRAIN}</Glyph>;
 }
 
+/**
+ * 附件类型图标：图片 / 文档。path 与描边参数抄自 PC `ChatInput.tsx` 附件菜单里的两个内联 svg
+ * （`width/height=15`、`viewBox="0 0 16 16"`、`strokeWidth=1.4`）——比工具栏图标的 stroke 2 细一档，照抄不归一。
+ */
+export function AttachmentKindIcon({ kind, size = 15, color = colors.textSecondary }: { kind: 'image' | 'doc'; size?: number; color?: string }) {
+  return <Glyph size={size} color={color} viewBox="0 0 16 16" strokeWidth={1.4}>
+    {kind === 'image'
+      ? <><Rect x={1.5} y={2.5} width={13} height={11} rx={2} /><Circle cx={5} cy={6} r={1.2} /><Path d="M1.5 11l3.5-3.5 2.5 2.5 3-4 4 5" /></>
+      : <><Path d="M3 2h7l4 4v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" /><Path d="M10 2v4h4M6 9h4M6 12h4" /></>}
+  </Glyph>;
+}
+
 /** 发送键图标（停止态是红方块） */
 export function SendIcon({ stop }: { stop: boolean }) {
   return <Svg width={stop ? 16 : 14} height={stop ? 16 : 14} viewBox="0 0 16 16" fill="currentColor" color={stop ? colors.danger : colors.textInverse}>

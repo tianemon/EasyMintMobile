@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { ModelCapabilities, PermissionMode } from '../protocol/types';
 import type { AttachmentKind, DraftAttachment } from '../session/attachments';
@@ -7,7 +7,7 @@ import { THINKING_LABELS } from '../session/thinking';
 import { commonStyles } from '../theme/commonStyles';
 import { colors, fontSize, radius, shadow, space } from '../theme/tokens';
 import type { ComposerControl } from '../types';
-import { ComposerIcon, Icon, SendIcon, iconSize } from './icons';
+import { AttachmentKindIcon, ComposerIcon, Icon, SendIcon, iconSize } from './icons';
 
 export type ModelProvider = ModelCapabilities['providers'][number];
 
@@ -40,6 +40,9 @@ export type ComposerProps = {
 
 const PERMISSION_OPTIONS = [['readonly', '只读'], ['standard', '标准'], ['full', '完全访问']] as const;
 
+/** 附件菜单两项，顺序即上下排布：图片在上、文档在下（与 PC 附件菜单同序） */
+const ATTACHMENT_OPTIONS = [['image', '图片'], ['doc', '文档']] as const;
+
 // ── 上下文使用率环（几何与 PC 的 .ctx-ring 一致）────────────────
 /** PC：svg 20×20 / r=8 / stroke 2.5 / 从 12 点起画（svg 整体旋转 -90°） */
 const RING_SIZE = 20;
@@ -71,11 +74,6 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const [showContextTip, setShowContextTip] = useState(false);
   const contextTipText = contextTip(contextPercent, contextWindow);
   const sendDisabled = running && !hasSession ? true : (!running && !draft.trim() && attachments.length === 0);
-  const openAttachmentMenu = () => Alert.alert('添加附件', undefined, [
-    { text: '图片', onPress: () => props.onPickAttachments('image') },
-    { text: '文档', onPress: () => props.onPickAttachments('doc') },
-    { text: '取消', style: 'cancel' },
-  ]);
   return <View style={[styles.composerCard, shadow.sm]}>
     {!!attachments.length && <View style={styles.attachmentPreview}>{attachments.map((attachment) => <View key={attachment.id} style={styles.attachmentItem}>
       {attachment.kind === 'image'
@@ -87,8 +85,11 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     </View>)}</View>}
     <TextInput value={draft} onChangeText={props.onDraftChange} placeholder={running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'} multiline style={styles.composerInput} />
     <View style={styles.composerToolbar}>
-      <Pressable accessibilityLabel="添加附件" style={styles.composerIconButton} onPress={openAttachmentMenu}>
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      {/* 回形针：与模型/权限/思考共用 control 槽位，展开互斥（打开附件菜单会收起另三个） */}
+      <Pressable accessibilityLabel="添加附件" accessibilityState={{ expanded: control === 'attachment' }}
+        style={[styles.composerIconButton, control === 'attachment' && styles.composerControlActive]}
+        onPress={() => props.onControlChange(control === 'attachment' ? null : 'attachment')}>
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={control === 'attachment' ? colors.textSecondary : colors.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
           <Path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
         </Svg>
       </Pressable>
@@ -117,6 +118,16 @@ export const Composer = memo(function Composer(props: ComposerProps) {
         <SendIcon stop={running && hasSession} />
       </Pressable>
     </View>
+    {/* 附件菜单：两个整行按钮上下排布（图片在上、文档在下），不套列表行的样式——
+        选中后先收起菜单再唤系统选择器，避免选择器盖在菜单上 */}
+    {control === 'attachment' && <View style={styles.attachmentMenu}>
+      {ATTACHMENT_OPTIONS.map(([kind, label]) => <Pressable key={kind} accessibilityLabel={`选择${label}`}
+        style={({ pressed }) => [styles.attachmentOption, pressed && styles.attachmentOptionPressed]}
+        onPress={() => { props.onControlChange(null); props.onPickAttachments(kind); }}>
+        <AttachmentKindIcon kind={kind} />
+        <Text style={styles.attachmentOptionText}>{label}</Text>
+      </Pressable>)}
+    </View>}
     {control === 'model' && <View style={styles.composerMenu}>
       <Text style={styles.composerMenuTitle}>{provider?.name ?? '当前供应商'}</Text>
       {(provider?.models ?? []).map((item) => <Pressable key={item.id} style={styles.composerOption} onPress={() => { props.onSelectModel(item.id, provider?.id); props.onControlChange(null); }}>
@@ -156,6 +167,12 @@ const styles = StyleSheet.create({
   composerMenuTitle: { paddingHorizontal: space.s2, paddingVertical: 6, color: colors.textMuted, fontSize: fontSize.caption, fontWeight: '600' },
   composerOption: { paddingHorizontal: 10, paddingVertical: 10, borderRadius: radius.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   composerOptionText: { color: colors.textPrimary, fontSize: fontSize.body },
+  // 附件菜单：容器不带分隔线（PC 的浮层也没有），靠两个按钮自带的描边区分
+  attachmentMenu: { margin: space.s1, marginTop: 2, gap: 6 },
+  // minHeight 44 是移动端最小触控高度（PC 该行约 31px，手机上照搬会难点中）
+  attachmentOption: { minHeight: 44, paddingHorizontal: space.s3, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.card, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  attachmentOptionPressed: { backgroundColor: colors.surfaceHover },
+  attachmentOptionText: { color: colors.textPrimary, fontSize: fontSize.xs },
   modelRow: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.elevated, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   selectedRow: { backgroundColor: colors.selectedRowBg, borderWidth: 1, borderColor: colors.selectedRowBorder },
   attachmentPreview: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.s2, paddingTop: space.s2 },
