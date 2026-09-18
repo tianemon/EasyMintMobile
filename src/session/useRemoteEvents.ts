@@ -88,6 +88,16 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         return;
       }
       if (!session || envelope.sessionId !== session.sessionId) return;
+      // 回合结束的权威信号（与桌面端同源：桌面端就是靠它清 busy）：清运行态，让发送键从「打断」回到「发送」。
+      // 不能只靠 turn_end——它只在部分路径广播（错误/中止/注入回合可能收不到），那样按钮会卡在打断态。
+      if (event.channel === 'agent:exit') {
+        frames.flush();
+        store.setRunning(false);
+        store.setMintStatus('');
+        streamMessageId.current = null;
+        store.setMessages((current) => current.map((item) => item.streaming ? { ...item, streaming: false } : item));
+        return;
+      }
       if (event.channel === 'agent:shell-output') {
         const id = String(data.id ?? '');
         const chunk = typeof data.chunk === 'string' ? data.chunk : '';
