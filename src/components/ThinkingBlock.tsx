@@ -142,7 +142,11 @@ export function ThinkingBlock({ content, active, onInnerScrollGesture }: Thinkin
           onScroll={onBodyScroll}
           onContentSizeChange={onBodyContentSizeChange}
         >
-          <Text selectable style={styles.text}>{active ? tailFadeNodes(streamWindow(content)) : content}</Text>
+          {/* Android 的 selectable Text 会在点击时请求原生焦点/可见区域；外层是 inverted
+              FlatList 时该定位会产生方向错位，表现为跳到思考块下方。iOS 不受此影响。 */}
+          <Text selectable={Platform.OS !== 'android'} style={styles.text}>
+            {active ? tailFadeNodes(streamWindow(content)) : content}
+          </Text>
         </ScrollView>
       )}
     </View>
