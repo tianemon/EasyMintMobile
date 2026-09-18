@@ -6,8 +6,9 @@ import type {
   RemoteEvent, SessionListItem,
 } from '../protocol/types';
 import type { ContextUsage, Page } from '../types';
-import { contentBlocks, contentText, object } from './messages';
+import { contentBlocks, contentText, markToolDone, object, prependMessage, upsertMessage } from './messages';
 import type { DisplayMessage } from './messages';
+import { createStreamFrameQueue, scheduleOnNextFrame } from './stream-frames';
 import { THINKING_ORDER } from './thinking';
 import { toolStatus } from './tools';
 
@@ -43,7 +44,8 @@ export type RemoteEventsOptions = {
 
 /**
  * 把电脑端推送的远程事件归并进会话状态。
- * 流式消息按 runId 复用同一条消息（streamMessageId），避免每个增量帧都新建气泡。
+ * 流式消息按 runId 复用同一条消息（streamMessageId），避免每个增量帧都新建气泡；
+ * 中间帧先按下一帧边界合并，见 stream-frames.ts。
  */
 export function useRemoteEvents(options: RemoteEventsOptions): void {
   const { client, deviceId, page, project, session, refreshHome, refreshProjects, refreshSessions, store } = options;
@@ -51,7 +53,22 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
 
   useEffect(() => {
     if (!client) return;
-    return client.onEvent((event: RemoteEvent, envelope) => {
+
+    /** 应用一帧流式快照：message_start 与 message 共用（streaming 决定「还在流式」标记） */
+    const applyStreamMessage = (data: Record<string, unknown>, streaming: boolean): void => {
+      if (!Array.isArray(data.blocks)) return;
+      const blocks = contentBlocks(data.blocks);
+      if (!blocks.length) return;
+      const id = streamMessageId.current ?? `stream-${String(data.runId ?? 'run')}-${Date.now()}`;
+      streamMessageId.current = id;
+      store.setMintStatus(streaming && blocks[blocks.length - 1]?.kind === 'thinking' ? '正在思考…' : '');
+      store.setMessages((current) => upsertMessage(current, { id, role: 'assistant', blocks, streaming }));
+    };
+
+    // 中间帧只在下一帧边界应用最后一帧（累计全文快照语义，中间态必被覆盖）
+    const frames = createStreamFrameQueue<Record<string, unknown>>((data) => applyStreamMessage(data, true), scheduleOnNextFrame);
+
+    const off = client.onEvent((event: RemoteEvent, envelope) => {
       const data = object(event.data);
       if (event.channel === 'project:open-windows-changed') {
         if (page === 'home') refreshHome();
@@ -127,35 +144,35 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       }
       if (event.channel !== 'agent:stream') return;
       const type = data.type;
+      // 唯一的可合并帧：同一条消息的流式中间帧（partial !== false）
+      if (type === 'message' && data.partial !== false) {
+        frames.defer(String(data.runId ?? 'run'), data);
+        return;
+      }
+      // 其余流式事件都是边界/终态信号，不可被窗口吞掉：先把待应用帧落地，保证应用顺序 = 到达顺序
+      frames.flush();
       if (type === 'turn_start') { store.setRunning(true); store.setMintStatus('等待模型响应…'); streamMessageId.current = null; }
       else if (type === 'turn_end' || type === 'error') {
         store.setRunning(false); store.setMintStatus(''); streamMessageId.current = null;
         store.setMessages((current) => current.map((item) => item.streaming ? { ...item, streaming: false } : item));
-        if (type === 'error') store.setMessages((current) => [...current, {
+        if (type === 'error') store.setMessages((current) => prependMessage(current, {
           id: `error-${Date.now()}`, role: 'system', text: String(data.message ?? '任务执行失败'), systemKind: 'error',
-        }]);
+        }));
       }
       else if (type === 'user_message' && typeof data.text === 'string') {
         if (object(data.details).sourceDeviceId === deviceId) return;
         const id = String(object(data.details).messageId ?? `user-${Date.now()}`);
         store.setMessages((current) => current.some((item) => item.id === id)
-          ? current : [...current, { id, role: 'user', text: data.text as string }]);
-      } else if ((type === 'message' || type === 'message_start') && Array.isArray(data.blocks)) {
-        if (type === 'message_start') streamMessageId.current = null;
-        const blocks = contentBlocks(data.blocks);
-        if (!blocks.length) return;
-        const id = streamMessageId.current ?? `stream-${String(data.runId ?? 'run')}-${Date.now()}`;
-        streamMessageId.current = id;
-        const isStreaming = type === 'message_start' || data.partial !== false;
-        store.setMintStatus(isStreaming && blocks[blocks.length - 1]?.kind === 'thinking' ? '正在思考…' : '');
-        store.setMessages((current) => {
-          const index = current.findIndex((item) => item.id === id);
-          return index < 0 ? [...current, { id, role: 'assistant', blocks, streaming: isStreaming }]
-            : current.map((item, i) => i === index ? { ...item, blocks, streaming: isStreaming } : item);
-        });
+          ? current : prependMessage(current, { id, role: 'user', text: data.text as string }));
+      } else if (type === 'message_start') {
+        streamMessageId.current = null;
+        applyStreamMessage(data, true);
+      } else if (type === 'message') {
+        // partial === false 的结束帧：立即应用，这就是最终内容
+        applyStreamMessage(data, false);
       } else if (type === 'custom_event' && typeof data.text === 'string') {
-        store.setMessages((current) => [...current, { id: `system-${Date.now()}`, role: 'system', text: data.text as string,
-          systemKind: String(object(data.details).kind ?? 'system') }]);
+        store.setMessages((current) => prependMessage(current, { id: `system-${Date.now()}`, role: 'system', text: data.text as string,
+          systemKind: String(object(data.details).kind ?? 'system') }));
       } else if (type === 'tool_progress') {
         const name = String(data.toolName ?? '工具调用');
         store.setMintStatus(toolStatus(name));
@@ -165,7 +182,7 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         store.setMessages((current) => {
           const delta = typeof data.deltaText === 'string' ? data.deltaText : '';
           const index = current.findIndex((item) => item.id === messageId);
-          if (index < 0) return [...current, { id: messageId, role: 'assistant', streaming: true, blocks: [{ kind: 'tool', id: toolId, name, output: delta, state: 'running' }] }];
+          if (index < 0) return prependMessage(current, { id: messageId, role: 'assistant', streaming: true, blocks: [{ kind: 'tool', id: toolId, name, output: delta, state: 'running' }] });
           return current.map((item, i) => {
             if (i !== index) return item;
             const blocks = [...(item.blocks ?? [])];
@@ -181,7 +198,7 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       } else if (type === 'tool_done') {
         store.setMintStatus('正在处理…');
         const toolId = String(data.toolCallId ?? data.toolName ?? 'running');
-        store.setMessages((current) => current.map((item) => ({ ...item, blocks: item.blocks?.map((block) => block.kind === 'tool' && block.id === toolId ? { ...block, state: 'done' as const } : block) })));
+        store.setMessages((current) => markToolDone(current, toolId));
       } else if (type === 'tool_result') {
         store.setMintStatus('正在处理…');
         const name = String(data.toolName ?? '工具调用');
@@ -192,7 +209,7 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         store.setMessages((current) => {
           const index = current.findIndex((item) => item.id === messageId);
           const state = data.isError ? 'error' as const : 'done' as const;
-          if (index < 0) return [...current, { id: messageId, role: 'assistant', streaming: true, blocks: [{ kind: 'tool', id: toolId, name, output, state }] }];
+          if (index < 0) return prependMessage(current, { id: messageId, role: 'assistant', streaming: true, blocks: [{ kind: 'tool', id: toolId, name, output, state }] });
           return current.map((item, i) => {
             if (i !== index) return item;
             const blocks = [...(item.blocks ?? [])];
@@ -204,6 +221,12 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         });
       }
     });
+
+    return () => {
+      off();
+      // 订阅重建/卸载时丢弃待应用帧，避免把上一个会话的帧写进新会话（后续帧仍是全量快照，内容会收敛）
+      frames.clear();
+    };
     // setter 由 useState 提供、标识稳定，无需进依赖；store 对象每次渲染都是新引用，故按字段解构传递。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, deviceId, page, project, session, refreshHome, refreshProjects, refreshSessions]);

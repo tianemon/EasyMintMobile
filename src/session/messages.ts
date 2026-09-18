@@ -18,6 +18,37 @@ export type DisplayMessage = {
   systemKind?: string;
 };
 
+/** 新消息插到列表头部（列表顺序与 MessageList 的 inverted 一致：最新在前） */
+export function prependMessage(list: DisplayMessage[], message: DisplayMessage): DisplayMessage[] {
+  return [message, ...list];
+}
+
+/**
+ * 按 id 就地替换消息，未命中的消息保持原对象引用。
+ * 「未变化的消息引用不变」是渲染隔离的前提——MessageRow 的 memo 靠它跳过非流式行，
+ * 流式帧只换来流式的那一条。
+ */
+export function upsertMessage(list: DisplayMessage[], message: DisplayMessage): DisplayMessage[] {
+  const index = list.findIndex((item) => item.id === message.id);
+  if (index < 0) return prependMessage(list, message);
+  return list.map((item, i) => i === index ? message : item);
+}
+
+/**
+ * 把指定工具块标为完成。只有包含该工具块的消息才换新对象，其余消息保持原引用
+ * （流式期间 tool_done 很密集，整列表换代会让所有行都重渲染）。
+ */
+export function markToolDone(list: DisplayMessage[], toolId: string): DisplayMessage[] {
+  let touched = false;
+  const next = list.map((item) => {
+    const blocks = item.blocks;
+    if (!blocks?.some((block) => block.kind === 'tool' && block.id === toolId && block.state !== 'done')) return item;
+    touched = true;
+    return { ...item, blocks: blocks.map((block) => block.kind === 'tool' && block.id === toolId ? { ...block, state: 'done' as const } : block) };
+  });
+  return touched ? next : list;
+}
+
 /** 把未知值收窄成可索引对象（协议字段全是 unknown） */
 export function object(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
@@ -53,7 +84,10 @@ export function contentBlocks(value: unknown): DisplayBlock[] {
   return blocks;
 }
 
-/** 把电脑端下发的会话快照还原成消息流（toolResult 回填到上一条 assistant 的对应工具块） */
+/**
+ * 把电脑端下发的会话快照还原成消息流（最新在前），toolResult 回填到上一条 assistant 的对应工具块。
+ * 输出顺序与 MessageList 一致，App 不再每帧 reverse。
+ */
 export function snapshotMessages(snapshot: SessionSnapshot): DisplayMessage[] {
   const messages: DisplayMessage[] = [];
   snapshot.messages.forEach((entry) => {
@@ -82,5 +116,5 @@ export function snapshotMessages(snapshot: SessionSnapshot): DisplayMessage[] {
       }
     }
   });
-  return messages;
+  return messages.reverse();
 }

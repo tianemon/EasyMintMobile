@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { ModelCapabilities, PermissionMode } from '../protocol/types';
 import { THINKING_LABELS } from '../session/thinking';
@@ -32,8 +33,11 @@ export type ComposerProps = {
 
 const PERMISSION_OPTIONS = [['readonly', '只读'], ['standard', '标准'], ['full', '完全访问']] as const;
 
-/** 输入卡片：多行输入 + 工具栏（模型/权限/思考/上下文占用/发送）+ 工具菜单 */
-export function Composer(props: ComposerProps) {
+/**
+ * 输入卡片：多行输入 + 工具栏（模型/权限/思考/上下文占用/发送）+ 工具菜单。
+ * memo：流式期间 App 每帧重渲染，props 未变时跳过整块输入卡（调用方需传稳定 props，见 App 的 composer）。
+ */
+export const Composer = memo(function Composer(props: ComposerProps) {
   const { draft, running, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, control } = props;
   const sendDisabled = running && !hasSession ? true : (!running && !draft.trim());
   return <View style={[styles.composerCard, shadow.sm]}>
@@ -71,7 +75,7 @@ export function Composer(props: ComposerProps) {
       </Pressable>)}
     </View>}
   </View>;
-}
+});
 
 const styles = StyleSheet.create({
   composerCard: { margin: space.s4, marginTop: 6, marginBottom: 26, padding: space.s1, borderRadius: radius.lg, backgroundColor: colors.elevated },

@@ -16,6 +16,7 @@ import type { ConnectionStatus } from '../types';
 type ChatScreenProps = {
   title: string;
   connection: ConnectionStatus;
+  /** 消息流，最新在前（与 MessageList 的 inverted 顺序一致） */
   messages: DisplayMessage[];
   pendingAsk: PendingAsk | null;
   answers: Record<string, string>;

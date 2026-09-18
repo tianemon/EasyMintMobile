@@ -7,6 +7,7 @@ import type {
   SessionListItem, SessionSnapshot,
 } from '../protocol/types';
 import type { ComposerControl, Page } from '../types';
+import { prependMessage } from './messages';
 import type { DisplayMessage } from './messages';
 
 /** 会话命令要写入的状态（setter 由 App 提供，标识稳定） */
@@ -107,7 +108,7 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     const text = draft.trim();
     store.setDraft('');
     store.setMintStatus('等待模型响应…');
-    store.setMessages((current) => [...current, { id: `local-${Date.now()}`, role: 'user', text }]);
+    store.setMessages((current) => prependMessage(current, { id: `local-${Date.now()}`, role: 'user', text }));
     try {
       if (session && running) {
         await client.command('session.steer', { projectId: project.id, sessionId: session.sessionId, data: { text } });
