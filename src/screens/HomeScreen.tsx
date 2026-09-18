@@ -1,6 +1,7 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Header, headerStyles } from '../components/Header';
 import { ListRow } from '../components/ListRow';
+import { Icon, iconSize } from '../components/icons';
 import { LoadingView } from '../components/LoadingView';
 import { NewSessionFab } from '../components/NewSessionFab';
 import { ProjectTitle } from '../components/ProjectTitle';
@@ -46,7 +47,7 @@ export function HomeScreen(props: HomeScreenProps) {
     <FlatList data={sessions.filter((item) => !item.archivedAt)} keyExtractor={(item) => item.sessionId} contentContainerStyle={commonStyles.list}
       onRefresh={props.onRefresh} refreshing={homeLoading}
       ListEmptyComponent={<View style={styles.emptyState}><Text style={commonStyles.empty}>当前项目还没有会话</Text></View>}
-      renderItem={({ item }) => <ListRow title={`${item.pinnedAt ? '📌 ' : ''}${item.title}`} subtitle={item.lastMessage || `${item.messageCount ?? 0} 条消息`}
+      renderItem={({ item }) => <ListRow title={item.title} leading={item.pinnedAt ? <Icon name="pin" size={iconSize.card} /> : undefined} subtitle={item.lastMessage || `${item.messageCount ?? 0} 条消息`}
         titleLines={1} subtitleLines={1} onPress={() => props.onOpenSession(item)} onLongPress={() => props.onLongPressSession(item)} />} />
     {!!project && <NewSessionFab onPress={props.onNewSession} />}
   </View>;

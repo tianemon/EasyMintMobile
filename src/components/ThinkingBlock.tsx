@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fontSize, radius, space } from '../theme/tokens';
+import { ChevronIcon, Icon, SpinIcon, iconSize } from './icons';
 
 type ThinkingBlockProps = {
   content: string;
@@ -33,8 +34,12 @@ export function ThinkingBlock({ content, active }: ThinkingBlockProps) {
         userControlled.current = true;
         setExpanded((current) => !current);
       }}>
-        <Text style={styles.thinkingLabel}>{active ? '正在思考' : '思考过程'}</Text>
-        <Text style={styles.thinkingToggle}>{expanded ? '收起⌃' : '展开⌄'}</Text>
+        <View style={styles.thinkingTitle}>
+          <Icon name="brain" />
+          <Text style={styles.thinkingLabel}>{active ? '正在思考' : '思考过程'}</Text>
+          {active && <SpinIcon size={iconSize.card} color={colors.accent} />}
+        </View>
+        <ChevronIcon direction={expanded ? 'down' : 'right'} color={colors.toolTitle} />
       </Pressable>
       {expanded && <Text selectable style={styles.thinkingText}>{content}</Text>}
     </View>
@@ -44,7 +49,7 @@ export function ThinkingBlock({ content, active }: ThinkingBlockProps) {
 const styles = StyleSheet.create({
   thinkingCard: { minWidth: 190, backgroundColor: colors.thinkingBody, borderRadius: radius.lg, overflow: 'hidden', marginBottom: space.s2 },
   thinkingHeader: { minHeight: 38, paddingHorizontal: 11, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  thinkingTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   thinkingLabel: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
-  thinkingToggle: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
   thinkingText: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 11, color: colors.textSecondary, fontSize: fontSize.detail, lineHeight: 19 },
 });

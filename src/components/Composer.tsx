@@ -4,7 +4,7 @@ import { THINKING_LABELS } from '../session/thinking';
 import { commonStyles } from '../theme/commonStyles';
 import { colors, fontSize, radius, shadow, space } from '../theme/tokens';
 import type { ComposerControl } from '../types';
-import { ComposerIcon, SendIcon } from './icons';
+import { ComposerIcon, Icon, SendIcon, iconSize } from './icons';
 
 export type ModelProvider = ModelCapabilities['providers'][number];
 
@@ -57,17 +57,17 @@ export function Composer(props: ComposerProps) {
     {control === 'model' && <View style={styles.composerMenu}>
       <Text style={styles.composerMenuTitle}>{provider?.name ?? '当前供应商'}</Text>
       {(provider?.models ?? []).map((item) => <Pressable key={item.id} style={styles.composerOption} onPress={() => { props.onSelectModel(item.id, provider?.id); props.onControlChange(null); }}>
-        <Text style={styles.composerOptionText}>{item.name}</Text>{model === item.id && <Text style={styles.check}>✓</Text>}
+        <Text style={styles.composerOptionText}>{item.name}</Text>{model === item.id && <Icon name="check" size={iconSize.nav} color={colors.accent} />}
       </Pressable>)}
     </View>}
     {control === 'permission' && <View style={styles.composerMenu}>
       {PERMISSION_OPTIONS.map(([value, label]) => <Pressable key={value} style={styles.composerOption} onPress={() => { props.onSelectPermission(value); props.onControlChange(null); }}>
-        <Text style={styles.composerOptionText}>{label}</Text>{permission === value && <Text style={styles.check}>✓</Text>}
+        <Text style={styles.composerOptionText}>{label}</Text>{permission === value && <Icon name="check" size={iconSize.nav} color={colors.accent} />}
       </Pressable>)}
     </View>}
     {control === 'thinking' && <View style={styles.composerMenu}>
       {thinkingOptions.map((item) => <Pressable key={item} style={styles.composerOption} onPress={() => { props.onSelectThinking(item); props.onControlChange(null); }}>
-        <Text style={styles.composerOptionText}>{THINKING_LABELS[item] ?? item}</Text>{thinking === item && <Text style={styles.check}>✓</Text>}
+        <Text style={styles.composerOptionText}>{THINKING_LABELS[item] ?? item}</Text>{thinking === item && <Icon name="check" size={iconSize.nav} color={colors.accent} />}
       </Pressable>)}
     </View>}
   </View>;
@@ -89,7 +89,6 @@ const styles = StyleSheet.create({
   composerMenuTitle: { paddingHorizontal: space.s2, paddingVertical: 6, color: colors.textMuted, fontSize: fontSize.caption, fontWeight: '600' },
   composerOption: { paddingHorizontal: 10, paddingVertical: 10, borderRadius: radius.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   composerOptionText: { color: colors.textPrimary, fontSize: fontSize.body },
-  check: { color: colors.accent, fontWeight: '800' },
   modelRow: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.elevated, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   selectedRow: { backgroundColor: colors.selectedRowBg, borderWidth: 1, borderColor: colors.selectedRowBorder },
 });

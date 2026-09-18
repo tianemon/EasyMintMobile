@@ -100,7 +100,6 @@ export const fontSize = {
   lg: 18, // --text-lg
   xl: 20,
   xxl: 22,
-  chevron: 30, // 列表行指示箭头（当前是文字符号，换成 SVG 图标后移除）
   display: 42, // 品牌字标 / 配对码
 } as const;
 

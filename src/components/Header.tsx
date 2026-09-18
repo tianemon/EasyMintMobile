@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fontSize, space } from '../theme/tokens';
+import { ChevronIcon, iconSize } from './icons';
 
 type HeaderProps = {
   title: ReactNode;
@@ -13,7 +14,8 @@ export function Header({ title, onBack, right }: HeaderProps) {
   return (
     <View style={styles.header}>
       <Pressable style={styles.headerSide} onPress={onBack} disabled={!onBack}>
-        <Text style={styles.headerAction}>{onBack ? '‹ 返回' : ''}</Text>
+        {!!onBack && <View style={styles.headerBack}><ChevronIcon size={iconSize.nav} color={colors.accent} direction="left" />
+          <Text style={styles.headerAction}>返回</Text></View>}
       </Pressable>
       {typeof title === 'string' ? <Text numberOfLines={1} style={styles.headerTitle}>{title}</Text> : <View style={styles.headerTitle}>{title}</View>}
       <View style={[styles.headerSide, styles.headerRight]}>{right}</View>
@@ -25,6 +27,7 @@ export function Header({ title, onBack, right }: HeaderProps) {
 export const headerStyles = StyleSheet.create({
   header: { height: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.divider, paddingHorizontal: space.s3, backgroundColor: colors.content },
   headerSide: { width: 88 },
+  headerBack: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   headerRight: { alignItems: 'flex-end' },
   headerAction: { color: colors.accent, fontSize: fontSize.base, fontWeight: '600' },
   headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700', fontSize: fontSize.title, color: colors.textPrimary },
