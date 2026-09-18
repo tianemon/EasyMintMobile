@@ -2,9 +2,9 @@ import { readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-/** 默认保留最近几次构建的产物。单个包约 100MB，不清理会无限增长；
- *  留超过 1 个是为了新包出问题时还能装回上一版。 */
-export const DEFAULT_KEEP_COUNT = 3;
+/** 保留几个产物。默认 1：只留最新包（用户 2026-09-18 明确）——产物可重新构建，
+ *  单包约 100MB，攒着只会占地方。要留上一版做对比时传参覆盖（如 `... 3`）。 */
+export const DEFAULT_KEEP_COUNT = 1;
 
 const APK_NAME = /^EasyMint-.*\.apk$/;
 

@@ -45,7 +45,8 @@ if (!existsSync(source)) throw new Error(`Gradle 构建完成，但没有找到 
 
 const now = new Date();
 const pad = (value, width = 2) => String(value).padStart(width, '0');
-const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.${pad(now.getMilliseconds(), 3)}`;
+// 命名：EasyMint-yyyyMMddHHmmss.apk（时间取到秒，同一秒内不会产生两个包）
+const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 const outputDir = join(projectRoot, 'apk');
 const output = join(outputDir, `EasyMint-${stamp}.apk`);
 mkdirSync(outputDir, { recursive: true });
