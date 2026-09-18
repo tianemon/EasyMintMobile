@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import type { ListRenderItemInfo } from 'react-native';
 import type { DisplayMessage } from '../session/messages';
 import { colors, fontSize, radius } from '../theme/tokens';
+import { MarkdownView } from './markdown/MarkdownView';
 import { SystemCard } from './SystemCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCard } from './ToolCard';
@@ -40,9 +41,11 @@ const MessageRow = memo(function MessageRow({ message }: { message: DisplayMessa
   if (message.role === 'system') return <SystemCard message={message} />;
   if (message.role === 'user') return <View style={[styles.bubble, styles.userBubble]}><Text selectable style={styles.bubbleText}>{message.text}</Text></View>;
   return <View style={[styles.bubble, styles.assistantBubble]}>{message.blocks?.map((block, index) => {
+    const isLast = index === (message.blocks?.length ?? 0) - 1;
     if (block.kind === 'thinking') return <ThinkingBlock key={`${message.id}-${index}-thinking`} content={block.text}
-      active={!!message.streaming && index === (message.blocks?.length ?? 0) - 1} />;
+      active={!!message.streaming && isLast} />;
     if (block.kind === 'tool') return <ToolCard key={`${message.id}-${block.id || index}`} tool={block} />;
-    return <Text selectable key={`${message.id}-${index}-text`} style={styles.bubbleText}>{block.text}</Text>;
+    // 模型正文走 Markdown 渲染；fadeTail 只给流式中正在增长的尾块（尾部字符渐隐）
+    return <MarkdownView key={`${message.id}-${index}-text`} text={block.text} fadeTail={!!message.streaming && isLast} />;
   })}</View>;
 });
