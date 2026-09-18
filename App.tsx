@@ -22,7 +22,7 @@ import { SessionsScreen } from './src/screens/SessionsScreen';
 import { clearCredential, loadCredential, saveCredential } from './src/security/credential-store';
 import { snapshotMessages } from './src/session/messages';
 import type { DisplayMessage } from './src/session/messages';
-import { MAX_TOTAL_ATTACHMENT_BYTES, pickAttachments } from './src/session/attachments';
+import { appendAttachments, pickAttachments } from './src/session/attachments';
 import type { AttachmentKind, DraftAttachment } from './src/session/attachments';
 import { THINKING_ORDER, resolveThinkingLevel } from './src/session/thinking';
 import { useRemoteEvents } from './src/session/useRemoteEvents';
@@ -261,18 +261,17 @@ export default function App() {
     onSelectModel: (modelId: string, providerId: string | undefined) => void actions.setRemoteSetting('model', modelId, providerId),
     onSelectPermission: (mode: PermissionMode) => void actions.setRemoteSetting('permission', mode),
     onSelectThinking: (level: string) => void actions.setRemoteSetting('thinking', level),
-    onPickAttachments: (kind: AttachmentKind) => void pickAttachments(kind)
-      .then((items) => setAttachments((current) => {
-        const next = [...current, ...items];
-        if (next.reduce((sum, item) => sum + item.size, 0) > MAX_TOTAL_ATTACHMENT_BYTES) {
-          Alert.alert('附件过大', '单次发送的附件总量不能超过 15 MB');
-          return current;
-        }
-        return next;
-      }))
-      .catch(fail),
+    // 上限判定收进 appendAttachments（与桌面端同源），这里只负责落 state 与提示。
+    // 读 attachments 快照而非函数式更新，是为了能拿到 notice 向用户说明超限原因；
+    // 选择器是系统模态，两次选取不会并发，快照不会过期。
+    onPickAttachments: (kind: AttachmentKind) => void pickAttachments(kind).then((items) => {
+      if (!items.length) return;
+      const result = appendAttachments(attachments, items);
+      setAttachments(result.next);
+      if (result.notice) Alert.alert('无法添加附件', result.notice);
+    }).catch(fail),
     onRemoveAttachment: (id: string) => setAttachments((current) => current.filter((item) => item.id !== id)),
-  }), [actions.send, actions.stop, actions.setRemoteSetting, fail]);
+  }), [actions.send, actions.stop, actions.setRemoteSetting, attachments, fail]);
 
   const composer: ComposerProps = useMemo(() => ({
     draft, attachments, running, hasSession: !!session, permission, permissionLabel, thinking, thinkingOptions, model,
