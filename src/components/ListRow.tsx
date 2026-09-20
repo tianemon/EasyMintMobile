@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { commonStyles } from '../theme/commonStyles';
-import { colors, fontSize, radius, space } from '../theme/tokens';
+import { makeCommonStyles } from '../theme/commonStyles';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, radius, space } from '../theme/tokens';
+import { useThemedStyles } from '../theme/theme-context';
 import { ChevronIcon, iconSize } from './icons';
 
 type ListRowProps = {
@@ -18,6 +20,8 @@ type ListRowProps = {
 
 /** 列表行（项目 / 会话通用）：标题 + 副标题 + 右箭头 */
 export function ListRow({ title, subtitle, titleLines, subtitleLines, leading, onPress, onLongPress }: ListRowProps) {
+  const styles = useThemedStyles(makeStyles);
+  const commonStyles = useThemedStyles(makeCommonStyles);
   return <Pressable delayLongPress={onLongPress ? 450 : undefined} style={styles.row} onPress={onPress} onLongPress={onLongPress}>
     <View style={styles.rowGrow}>
       <View style={styles.rowTitleLine}>
@@ -30,7 +34,7 @@ export function ListRow({ title, subtitle, titleLines, subtitleLines, leading, o
   </Pressable>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, backgroundColor: colors.card, padding: space.s4, borderWidth: 1, borderColor: colors.border, gap: space.s3 },
   rowGrow: { flex: 1, gap: space.s1 },
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },

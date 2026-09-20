@@ -1,18 +1,26 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Alert } from 'react-native';
 import type { RemoteClient } from '../connection/remote-client';
 import type {
-  BackgroundAgent, BackgroundShell, ModelCapabilities, OpenProject, PendingAsk, PermissionMode,
-  SessionListItem, SessionSnapshot,
+  ModelCapabilities, OpenProject, PendingAsk, PermissionMode, SessionListItem, SessionSnapshot,
 } from '../protocol/types';
-import type { ComposerControl, Page } from '../types';
+import type { AskAnswer, ComposerControl, Page, ShellLog } from '../types';
 import type { DraftAttachment } from './attachments';
 import { prependMessage } from './messages';
-import type { DisplayMessage } from './messages';
+import { DRAFT_SESSION_ID, EMPTY_RUNTIME } from './runtime';
+import type { PatchRuntime } from './runtime';
 
-/** 会话命令要写入的状态（setter 由 App 提供，标识稳定） */
+/**
+ * 会话命令要写入的状态。
+ * 会话级状态走 `patchRuntime(sessionId, ...)` 按会话落格；`setSession/sessions/...` 是界面导航状态，保持全局。
+ */
 export type SessionActionsStore = {
+  patchRuntime: PatchRuntime;
+  /** 新会话：`session.send` 拿到真实 id 后把草稿格状态迁过去 */
+  migrateRuntime: (from: string, to: string) => void;
+  /** 状态文案（按会话去重） */
+  setMintStatus: (sessionId: string, value: string) => void;
   setPage: (page: Page) => void;
   setProject: (project: OpenProject | null) => void;
   setBusy: (value: boolean) => void;
@@ -22,18 +30,7 @@ export type SessionActionsStore = {
   setSessions: Dispatch<SetStateAction<SessionListItem[]>>;
   setDraft: (value: string) => void;
   setAttachments: Dispatch<SetStateAction<DraftAttachment[]>>;
-  setMintStatus: (value: string) => void;
-  setRunning: (value: boolean) => void;
-  setMessages: Dispatch<SetStateAction<DisplayMessage[]>>;
-  setPermission: (value: PermissionMode) => void;
-  setThinking: (value: string) => void;
-  setModel: (value: string) => void;
-  setProvider: (value: string | undefined) => void;
   setModels: (value: ModelCapabilities | null) => void;
-  setBackgroundShells: Dispatch<SetStateAction<BackgroundShell[]>>;
-  setBackgroundAgents: Dispatch<SetStateAction<BackgroundAgent[]>>;
-  setPendingAsk: (value: PendingAsk | null) => void;
-  setAskAnswers: (value: Record<string, string>) => void;
   setSettingsOpen: (value: boolean) => void;
   setMenuSession: (value: SessionListItem | null) => void;
   setRenameTitle: (value: string) => void;
@@ -54,9 +51,9 @@ export type SessionActionsOptions = {
   menuSession: SessionListItem | null;
   renameTitle: string;
   pendingAsk: PendingAsk | null;
-  askAnswers: Record<string, string>;
   fail: (error: unknown) => void;
-  applySnapshot: (snapshot: SessionSnapshot) => void;
+  /** 快照落地到**该会话自己的格**（调用方给出会话 id，不做「当前会话」推断） */
+  applySnapshot: (sessionId: string, snapshot: SessionSnapshot) => void;
   refreshSessions: (project: OpenProject) => Promise<void>;
   store: SessionActionsStore;
 };
@@ -66,8 +63,13 @@ export type SessionActions = {
   startNewSession: () => Promise<void>;
   send: () => Promise<void>;
   stop: () => Promise<void>;
+  /** 停止单个后台命令 */
+  stopShell: (shellId: string) => Promise<void>;
+  /** 读后台命令日志尾部（查看完整输出） */
+  readShellLog: (shellId: string) => Promise<ShellLog>;
   setRemoteSetting: (kind: 'permission' | 'thinking' | 'model', value: string, modelProvider?: string) => Promise<void>;
-  answerAsk: () => Promise<void>;
+  /** 回答提问：答案由提问卡自己收集（PC 同款），这里只负责递交；null/空列表 = 取消提问 */
+  answerAsk: (answers: AskAnswer[] | null) => Promise<void>;
   renameSession: () => Promise<void>;
   setPinned: (pinned: boolean) => Promise<void>;
   archiveCurrent: (archived: boolean) => void;
@@ -77,21 +79,37 @@ export type SessionActions = {
 export function useSessionActions(options: SessionActionsOptions): SessionActions {
   const {
     client, project, session, page, running, draft, attachments, permission, thinking, model, provider,
-    menuSession, renameTitle, pendingAsk, askAnswers, fail, applySnapshot, refreshSessions, store,
+    menuSession, renameTitle, pendingAsk, fail, applySnapshot, refreshSessions, store,
   } = options;
+
+  /** 切换会话的请求序号：只有最新一次切换的快照允许落地（老快照回来晚会把新会话盖掉） */
+  const openSeq = useRef(0);
 
   const openSession = useCallback(async (selected: SessionListItem, selectedProject = project, origin: 'home' | 'sessions' = page === 'sessions' ? 'sessions' : 'home') => {
     if (!client || !selectedProject) return;
+    const sessionId = selected.sessionId;
+    const seq = ++openSeq.current;
     try {
       store.setBusy(true);
       store.setComposerControl(null);
       store.setAttachments([]);
+      // 先把该会话**自己的格**清成空：不残留上次打开它时的消息/运行态/提问卡。
+      // 清的是它自己，别的会话的格不动——这正是「每会话一份」的意义。
+      store.setMintStatus(sessionId, '');
+      store.patchRuntime(sessionId, {
+        messages: [], running: false, pendingAsk: null,
+        backgroundShells: [], backgroundAgents: [], contextUsage: { percent: null },
+      });
       const [snapshot, capabilities] = await Promise.all([
-        client.command<SessionSnapshot>('session.snapshot', { projectId: selectedProject.id, sessionId: selected.sessionId }),
+        client.command<SessionSnapshot>('session.snapshot', { projectId: selectedProject.id, sessionId }),
         client.command<ModelCapabilities>('capability.models'),
       ]);
-      store.setProject(selectedProject); store.setSession(selected); store.setChatOrigin(origin); applySnapshot(snapshot); store.setModels(capabilities); store.setPage('chat');
-    } catch (e) { fail(e); } finally { store.setBusy(false); }
+      // 期间又切了别的会话：这次快照作废（否则旧快照会把当前会话的内容盖成上一个会话的）
+      if (seq !== openSeq.current) return;
+      store.setProject(selectedProject); store.setSession(selected); store.setChatOrigin(origin);
+      applySnapshot(sessionId, snapshot);
+      store.setModels(capabilities); store.setPage('chat');
+    } catch (e) { if (seq === openSeq.current) fail(e); } finally { if (seq === openSeq.current) store.setBusy(false); }
   }, [applySnapshot, client, fail, page, project, store]);
 
   const startNewSession = useCallback(async () => {
@@ -101,9 +119,19 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
         client.command<{ permissionMode: PermissionMode; thinkingLevel: string; model?: string }>('session.create', { projectId: project.id }),
         client.command<ModelCapabilities>('capability.models'),
       ]);
-      store.setComposerControl(null); store.setAttachments([]); store.setChatOrigin(page === 'home' ? 'home' : 'sessions'); store.setSession(null); store.setMessages([]); store.setPermission(defaults.permissionMode);
-      store.setThinking(defaults.thinkingLevel); store.setModel(defaults.model ?? '');
-      store.setModels(capabilities); store.setPage('chat'); store.setMintStatus(''); store.setBackgroundShells([]); store.setBackgroundAgents([]);
+      // 新会话写进草稿格（真实 id 要等 send 才知道）；重置干净，别的会话的格不动
+      store.setMintStatus(DRAFT_SESSION_ID, '');
+      store.patchRuntime(DRAFT_SESSION_ID, {
+        ...EMPTY_RUNTIME,
+        permission: defaults.permissionMode,
+        thinking: defaults.thinkingLevel,
+        model: defaults.model ?? '',
+      });
+      store.setComposerControl(null); store.setAttachments([]);
+      store.setChatOrigin(page === 'home' ? 'home' : 'sessions'); store.setSession(null);
+      store.setModels(capabilities); store.setPage('chat');
+      // 作废在途的会话切换请求（新会话优先）
+      openSeq.current += 1;
     } catch (e) { fail(e); }
   }, [client, fail, page, project, store]);
 
@@ -111,10 +139,14 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     if (!client || !project || (!draft.trim() && attachments.length === 0)) return;
     const text = draft.trim();
     const outgoingAttachments = attachments;
+    // 未创建的新会话先写草稿格；send 拿到真实 id 后再迁过去
+    const sessionId = session?.sessionId ?? DRAFT_SESSION_ID;
     store.setDraft('');
     store.setAttachments([]);
-    store.setMintStatus('等待模型响应…');
-    store.setMessages((current) => prependMessage(current, { id: `local-${Date.now()}`, role: 'user', text, attachments: outgoingAttachments }));
+    store.setMintStatus(sessionId, '等待模型响应…');
+    store.patchRuntime(sessionId, (current) => ({
+      messages: prependMessage(current.messages, { id: `local-${Date.now()}`, role: 'user', text, attachments: outgoingAttachments }),
+    }));
     try {
       const remoteAttachments = outgoingAttachments.map(({ name, kind, mimeType, data }) => ({ name, kind, mimeType, data }));
       if (session && running) {
@@ -127,26 +159,55 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
         });
         if (!session) {
           const created = { sessionId: result.sessionId, title: text.slice(0, 30) || outgoingAttachments[0]?.name || '附件', createdAt: Date.now(), updatedAt: Date.now() };
+          store.migrateRuntime(DRAFT_SESSION_ID, result.sessionId);
           store.setSession(created);
           store.setSessions((current) => current.some((item) => item.sessionId === result.sessionId) ? current : [created, ...current]);
         }
-        store.setRunning(true);
+        store.patchRuntime(result.sessionId, { running: true });
       }
-    } catch (e) { store.setMintStatus(''); fail(e); }
+    } catch (e) { store.setMintStatus(sessionId, ''); fail(e); }
   }, [attachments, client, draft, fail, model, permission, project, provider, running, session, store, thinking]);
 
   const stop = useCallback(async () => {
     if (!client || !project || !session) return;
     try {
       await client.command('session.abort', { projectId: project.id, sessionId: session.sessionId });
-      store.setRunning(false); store.setMintStatus('');
+      store.setMintStatus(session.sessionId, '');
+      store.patchRuntime(session.sessionId, { running: false });
     } catch (e) { fail(e); }
   }, [client, fail, project, session, store]);
 
+  /**
+   * 停止单个后台命令（PC 的 ShellBar 行内「停止」同一条命令）。
+   * 后台任务清单由 agent:shell-count 事件回写（PC 侧 registry 状态变化会广播），所以不必本地改列表。
+   */
+  const stopShell = useCallback(async (shellId: string) => {
+    if (!client || !project || !session) return;
+    try {
+      await client.command('shell.stop', { projectId: project.id, sessionId: session.sessionId, data: { shellId } });
+      // 乐观置 stopping：让按钮立刻变「停止中…」（PC 靠 registry 广播回写，链路上慢一拍）
+      store.patchRuntime(session.sessionId, (current) => ({
+        backgroundShells: current.backgroundShells.map((item) => item.id === shellId ? { ...item, status: 'stopping' as const } : item),
+      }));
+    } catch (e) { fail(e); }
+  }, [client, fail, project, session, store]);
+
+  /**
+   * 读后台命令日志尾部（「查看完整输出」的首屏数据）。
+   * 与 PC 同口径：只传 shellId，本机日志路径由 PC 侧自己解析、不回传（见桌面端 remote-command-router）。
+   */
+  const readShellLog = useCallback(async (shellId: string): Promise<ShellLog> => {
+    if (!client || !project || !session) return { content: '', truncated: false };
+    return await client.command<ShellLog>('shell.readLog', {
+      projectId: project.id, sessionId: session.sessionId, data: { shellId },
+    });
+  }, [client, project, session]);
+
   const setRemoteSetting = useCallback(async (kind: 'permission' | 'thinking' | 'model', value: string, modelProvider?: string) => {
-    if (kind === 'permission') store.setPermission(value as PermissionMode);
-    if (kind === 'thinking') store.setThinking(value);
-    if (kind === 'model') { store.setModel(value); store.setProvider(modelProvider); }
+    const sessionId = session?.sessionId ?? DRAFT_SESSION_ID;
+    if (kind === 'permission') store.patchRuntime(sessionId, { permission: value as PermissionMode });
+    if (kind === 'thinking') store.patchRuntime(sessionId, { thinking: value });
+    if (kind === 'model') store.patchRuntime(sessionId, { model: value, provider: modelProvider });
     if (!client || !project || !session) return;
     try {
       const command = kind === 'permission' ? 'session.setPermission' : kind === 'thinking' ? 'session.setThinking' : 'session.setModel';
@@ -155,16 +216,14 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     } catch (e) { fail(e); }
   }, [client, fail, project, session, store]);
 
-  const answerAsk = useCallback(async () => {
+  const answerAsk = useCallback(async (answers: AskAnswer[] | null) => {
     if (!client || !project || !session || !pendingAsk) return;
     try {
       await client.command('session.answerAsk', { projectId: project.id, sessionId: session.sessionId,
-        data: { requestId: pendingAsk.requestId, answers: pendingAsk.questions.map((question) => ({
-          questionId: question.id, values: [askAnswers[question.id] ?? ''],
-        })) } });
-      store.setPendingAsk(null); store.setAskAnswers({});
+        data: { requestId: pendingAsk.requestId, answers } });
+      store.patchRuntime(session.sessionId, { pendingAsk: null });
     } catch (e) { fail(e); }
-  }, [askAnswers, client, fail, pendingAsk, project, session, store]);
+  }, [client, fail, pendingAsk, project, session, store]);
 
   const renameSession = useCallback(async () => {
     const target = menuSession ?? session;
@@ -202,5 +261,5 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     }]);
   }, [client, fail, menuSession, project, refreshSessions, session, store]);
 
-  return { openSession, startNewSession, send, stop, setRemoteSetting, answerAsk, renameSession, setPinned, archiveCurrent };
+  return { openSession, startNewSession, send, stop, stopShell, readShellLog, setRemoteSetting, answerAsk, renameSession, setPinned, archiveCurrent };
 }

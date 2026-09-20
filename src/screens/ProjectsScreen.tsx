@@ -2,8 +2,10 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Header } from '../components/Header';
 import { ListRow } from '../components/ListRow';
 import type { OpenProject } from '../protocol/types';
-import { commonStyles } from '../theme/commonStyles';
-import { colors, fontSize } from '../theme/tokens';
+import { makeCommonStyles } from '../theme/commonStyles';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize } from '../theme/tokens';
+import { useThemedStyles } from '../theme/theme-context';
 
 type ProjectsScreenProps = {
   projects: OpenProject[];
@@ -14,6 +16,8 @@ type ProjectsScreenProps = {
 
 /** 电脑端打开的项目列表 */
 export function ProjectsScreen({ projects, statusLabel, onBack, onOpenProject }: ProjectsScreenProps) {
+  const styles = useThemedStyles(makeStyles);
+  const commonStyles = useThemedStyles(makeCommonStyles);
   return <View style={commonStyles.fill}>
     <Header title="打开的项目" onBack={onBack} right={<Text style={styles.onlineDot}>{statusLabel}</Text>} />
     <FlatList data={projects} keyExtractor={(item) => item.id} contentContainerStyle={commonStyles.list}
@@ -22,6 +26,6 @@ export function ProjectsScreen({ projects, statusLabel, onBack, onOpenProject }:
   </View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   onlineDot: { color: colors.accent, fontSize: fontSize.caption },
 });

@@ -10,9 +10,11 @@ import { MessageList } from '../components/MessageList';
 import { ConnectionIndicator } from '../components/ProjectTitle';
 import type { BackgroundAgent, BackgroundShell, PendingAsk } from '../protocol/types';
 import type { DisplayMessage } from '../session/messages';
-import { commonStyles } from '../theme/commonStyles';
-import { colors, fontSize, space } from '../theme/tokens';
-import type { ConnectionStatus } from '../types';
+import { makeCommonStyles } from '../theme/commonStyles';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, space } from '../theme/tokens';
+import { useTheme, useThemedStyles } from '../theme/theme-context';
+import type { AskAnswer, ConnectionStatus } from '../types';
 
 type ChatScreenProps = {
   title: string;
@@ -20,25 +22,29 @@ type ChatScreenProps = {
   /** 消息流，最新在前（与 MessageList 的 inverted 顺序一致） */
   messages: DisplayMessage[];
   pendingAsk: PendingAsk | null;
-  answers: Record<string, string>;
-  onAnswerChange: (questionId: string, value: string) => void;
-  onAnswerSubmit: () => void;
+  onAnswerSubmit: (answers: AskAnswer[] | null) => void;
   backgroundShells: BackgroundShell[];
   backgroundAgents: BackgroundAgent[];
   running: boolean;
   mintStatus: string;
   composer: ComposerProps;
+  /** 点后台命令 → 打开输出查看页（PC ShellBar 同款） */
+  onOpenShellOutput: (shell: BackgroundShell) => void;
+  /** 停止单个后台命令 */
+  onStopShell: (shellId: string) => void;
   onBack: () => void;
 };
 
 /** 聊天页：标题栏 + 消息流 + 提问卡 + 后台任务 + 状态行 + 输入卡 */
 export function ChatScreen(props: ChatScreenProps) {
+  const commonStyles = useThemedStyles(makeCommonStyles);
   return <KeyboardAvoidingView style={commonStyles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
     <Header title={props.title} onBack={props.onBack} right={<ConnectionIndicator status={props.connection} />} />
     {/* 定位期临时：消息区渲染异常直接画在屏幕上，不留空白（排查完可移除边界） */}
     <ErrorBoundary label="消息区渲染出错"><MessageList messages={props.messages} /></ErrorBoundary>
-    {!!props.pendingAsk && <AskCard ask={props.pendingAsk} answers={props.answers} onAnswerChange={props.onAnswerChange} onSubmit={props.onAnswerSubmit} />}
-    <BackgroundPills shells={props.backgroundShells} agents={props.backgroundAgents} />
+    {!!props.pendingAsk && <AskCard ask={props.pendingAsk} onSubmit={props.onAnswerSubmit} />}
+    <BackgroundPills shells={props.backgroundShells} agents={props.backgroundAgents}
+      onOpenShellOutput={props.onOpenShellOutput} onStopShell={props.onStopShell} />
     {props.running && !!props.mintStatus && <MintStatus text={props.mintStatus} />}
     <Composer {...props.composer} />
   </KeyboardAvoidingView>;
@@ -46,6 +52,8 @@ export function ChatScreen(props: ChatScreenProps) {
 
 /** 运行状态行：模型图标（带动画）+ 当前动作文案，与 PC StatusBar 同构 */
 function MintStatus({ text }: { text: string }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   // 图标占固定宽度（PC 是 w-[1.25em]）：动效不能把右侧文字推来推去
   return <View style={styles.mintStatus}>
     <View style={styles.mintStatusGlyph}><ModelGlyph animated size={14} color={colors.textSecondary} /></View>
@@ -53,7 +61,7 @@ function MintStatus({ text }: { text: string }) {
   </View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   mintStatus: { minHeight: 26, marginHorizontal: space.s4, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 7 },
   mintStatusGlyph: { width: 16, alignItems: 'center', justifyContent: 'center' },
   mintStatusText: { color: colors.textSecondary, fontSize: fontSize.caption, fontWeight: '500' },

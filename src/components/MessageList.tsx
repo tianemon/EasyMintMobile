@@ -3,13 +3,15 @@ import { FlatList, Image, Platform, StyleSheet, Text, View } from 'react-native'
 import type { ListRenderItemInfo } from 'react-native';
 import { mergeAssistantRuns } from '../session/messages';
 import type { DisplayMessage } from '../session/messages';
-import { colors, fontSize, radius } from '../theme/tokens';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, radius } from '../theme/tokens';
+import { useThemedStyles } from '../theme/theme-context';
 import { MarkdownView } from './markdown/MarkdownView';
 import { SystemCard } from './SystemCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCard } from './ToolCard';
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { flex: 1 },
   content: { padding: 14 },
   /**
@@ -50,6 +52,7 @@ const maintainVisibleContentPosition = { minIndexForVisible: 0, autoscrollToTopT
  * 不会被新内容拉回。它不是 VirtualizedList 的默认行为，不能删掉后依赖隐式锚定。
  */
 export const MessageList = memo(function MessageList({ messages }: MessageListProps) {
+  const styles = useThemedStyles(makeStyles);
   const displayMessages = useMemo(() => mergeAssistantRuns(messages), [messages]);
   const [innerScrollGesture, setInnerScrollGesture] = useState(false);
   const setInnerGesture = useCallback((active: boolean): void => setInnerScrollGesture(active), []);
@@ -84,7 +87,8 @@ const MessageRow = memo(function MessageRow({ message, onInnerScrollGesture }: {
   message: DisplayMessage;
   onInnerScrollGesture: (active: boolean) => void;
 }) {
-  if (message.role === 'system') return <View style={styles.row}><SystemCard message={message} /></View>;
+  const styles = useThemedStyles(makeStyles);
+  if (message.role === 'system') return <View style={styles.row}><SystemCard message={message} onInnerScrollGesture={onInnerScrollGesture} /></View>;
   if (message.role === 'user') {
     return <View style={styles.row}>
       <View style={[styles.bubble, styles.userBubble]}>
@@ -101,7 +105,7 @@ const MessageRow = memo(function MessageRow({ message, onInnerScrollGesture }: {
       const isLast = index === (message.blocks?.length ?? 0) - 1;
       if (block.kind === 'thinking') return <ThinkingBlock key={`${message.id}-${index}-thinking`} content={block.text}
         active={!!message.streaming && isLast} onInnerScrollGesture={onInnerScrollGesture} />;
-      if (block.kind === 'tool') return <ToolCard key={`${message.id}-${block.id || index}`} tool={block} />;
+      if (block.kind === 'tool') return <ToolCard key={`${message.id}-${block.id || index}`} tool={block} onInnerScrollGesture={onInnerScrollGesture} />;
       // 模型正文走 Markdown 渲染；fadeTail 只给流式中正在增长的尾块（尾部字符渐隐）
       return <MarkdownView key={`${message.id}-${index}-text`} text={block.text} fadeTail={!!message.streaming && isLast} />;
     })}</View>

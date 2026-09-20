@@ -1,7 +1,9 @@
 import { Component } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, space } from '../theme/tokens';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, space } from '../theme/tokens';
+import { useThemedStyles } from '../theme/theme-context';
 
 type Props = { children: ReactNode; label?: string };
 type State = { error: Error | null };
@@ -24,15 +26,21 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     const { error } = this.state;
     if (!error) return this.props.children;
-    return <View style={styles.box}>
-      <Text style={styles.title}>{this.props.label ?? '渲染出错'}</Text>
-      <Text style={styles.msg} selectable>{error.message}</Text>
-      {!!error.stack && <Text style={styles.stack} selectable numberOfLines={14}>{error.stack}</Text>}
-    </View>;
+    return <ErrorFallback label={this.props.label} error={error} />;
   }
 }
 
-const styles = StyleSheet.create({
+/** 错误边界必须是 class（React 至今只有 class 能承接渲染异常），故把带主题的渲染挪到函数组件里。 */
+function ErrorFallback({ label, error }: { label?: string; error: Error }) {
+  const styles = useThemedStyles(makeStyles);
+  return <View style={styles.box}>
+    <Text style={styles.title}>{label ?? '渲染出错'}</Text>
+    <Text style={styles.msg} selectable>{error.message}</Text>
+    {!!error.stack && <Text style={styles.stack} selectable numberOfLines={14}>{error.stack}</Text>}
+  </View>;
+}
+
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   box: { flex: 1, padding: space.s4, gap: space.s2, backgroundColor: colors.dangerBg },
   title: { color: colors.danger, fontWeight: '700', fontSize: fontSize.base },
   msg: { color: colors.textPrimary, fontSize: fontSize.caption },

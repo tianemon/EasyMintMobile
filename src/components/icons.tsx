@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Animated, Easing, View } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import type { PermissionMode } from '../protocol/types';
-import { colors } from '../theme/tokens';
+import type { ThemeColors } from '../theme/tokens';
+import { useTheme } from '../theme/theme-context';
 
 /**
  * 内联 SVG 图标库 —— path 数据抄自 PC 端手抄的 Lucide 路径（ChatBlocks 的工具图标表与
@@ -11,7 +12,8 @@ import { colors } from '../theme/tokens';
  * PinLayer 的钉住图标），不引图标库，保证两端描边风格与尺寸一致。
  *
  * PC 用 `stroke="currentColor"` 继承文字色；RN 无此机制，改为每个图标由 color prop 传入
- * （默认值取该图标在 PC 上的语义色），尺寸统一走 iconSize 五档。
+ * （默认值取该图标在 PC 上的语义**配色键名**，运行时按当前主题解析——不能写死颜色值，否则切主题不生效），
+ * 尺寸统一走 iconSize 五档。
  * react-native-svg 会把 `<Svg>` 根上的 stroke/strokeWidth/linecap 继承给子元素
  * （原生 mergeProperties），因此子形状只写几何数据。
  */
@@ -65,68 +67,83 @@ const GLYPH_CENTER = { x: 14.33, y: 12 };
 const GLYPH_GATHER = 0.45;
 /** 单程时长；往返一个循环 2.4s，对齐 PC 的 `2.4s ease-in-out infinite` */
 const GLYPH_HALF_CYCLE_MS = 1200;
-/** 绘图用的 24 视图盒边长（外层容器是 size 见方，两者比就是缩放比） */
+/** 视图盒边长（与 PC `<svg viewBox="0 0 24 24">` 一致；位移与缩放都写在这套用户坐标里） */
 const GLYPH_VIEWBOX = 24;
 
 /**
  * 模型图标（三点互联 + 连线）：输入卡的模型标签与状态行共用，与 PC 同一套几何。
  *
  * `animated` 只有状态行要（输入卡的标签保持静态，避免与状态行同时动）。
- * 动画在这边不能用 react-native-svg 的 props 走原生驱动（cx/cy 不是 style 属性，只能用 JS 驱动，
- * 而流式期间 JS 线程本来就满），所以拆成三个绝对定位的 Animated.View 各自平移 +
- * 一层连线整体缩放 —— 位移量与连线缩放都走 transform，能开 useNativeDriver，不占 JS 线程。
+ *
+ * 动效必须**在同一个 `<svg>` 里做几何变换**，与 PC 的 `.model-glyph-node-*` / `.model-glyph-edge`
+ * （CSS transform 直接加在 `<circle>` / `<path>` 上，`transform-box: view-box`）逐项对应。
+ * 曾踩过的坑：早先版本用 RN 的 Animated.View 包住各自一个 `<Svg>` 再缩放，缩放的是**已光栅化的图层**
+ * —— 细描边（2 用户单位，14px 图标上约 1.2px）被降到 45% 时会被降采样吃掉，表现为线条随着聚拢消失；
+ * 而圆点是实心、墨量够，所以看着没事。改成让 SVG 重绘矢量后，线的粗细与 PC 一致且不再发虚。
+ *
+ * 代价：SVG 的属性只能 JS 驱动（cx/cy/变换都不是 style 属性），没法走 useNativeDriver。
+ * 换来的好处是位移与缩放共用同一个 Animated.Value——同一时钟，永远不会出现「点到了线没到」。
  */
-export function ModelGlyph({ size = 15, color = colors.textMuted, animated = false }: { size?: number; color?: string; animated?: boolean }) {
-  const nodes = GLYPH_NODES.map((node) => <Circle key={`${node.cx}-${node.cy}`} cx={node.cx} cy={node.cy} r={GLYPH_NODE_R}
-    fill={node.filled ? color : 'none'} />);
-  const edges = GLYPH_EDGES.map((d) => <Path key={d} d={d} />);
-  const box = { width: size, height: size } as const;
-  const svgProps = { viewBox: `0 0 ${GLYPH_VIEWBOX} ${GLYPH_VIEWBOX}`, fill: 'none', stroke: color, strokeWidth: GLYPH_STROKE, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+export function ModelGlyph({ size = 15, color, animated = false }: { size?: number; color?: string; animated?: boolean }) {
+  const { colors } = useTheme();
+  const stroke = color ?? colors.textMuted;
+  const svgProps = { viewBox: `0 0 ${GLYPH_VIEWBOX} ${GLYPH_VIEWBOX}`, fill: 'none', stroke, strokeWidth: GLYPH_STROKE, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
-  if (!animated) return <Svg width={size} height={size} {...svgProps}>{nodes}{edges}</Svg>;
-  return <AnimatedModelGlyph size={size} box={box} svgProps={svgProps} nodes={nodes} edges={edges} />;
+  if (animated) return <AnimatedModelGlyph size={size} stroke={stroke} svgProps={svgProps} />;
+  return <Svg width={size} height={size} {...svgProps}>
+    {GLYPH_NODES.map((node) => <Circle key={`${node.cx}-${node.cy}`} cx={node.cx} cy={node.cy} r={GLYPH_NODE_R}
+      fill={node.filled ? stroke : 'none'} />)}
+    {GLYPH_EDGES.map((d) => <Path key={d} d={d} />)}
+  </Svg>;
 }
 
 type GlyphSvgProps = { viewBox: string; fill: string; stroke: string; strokeWidth: number; strokeLinecap: 'round'; strokeLinejoin: 'round' };
 
-function AnimatedModelGlyph({ size, box, svgProps, nodes, edges }: {
-  size: number; box: { width: number; height: number }; svgProps: GlyphSvgProps; nodes: ReactNode; edges: ReactNode;
-}) {
+/**
+ * 动效只能挂在 `<G>` 上：react-native-svg 给 G 重写了 setNativeProps，会把 x/y/scale/originX/originY
+ * 折算成 matrix 再下发；挂在 Circle/Path 上时这些变换属性不会变成矩阵，动效会静默不生效。
+ */
+const AnimatedG = Animated.createAnimatedComponent(G);
+
+function AnimatedModelGlyph({ size, stroke, svgProps }: { size: number; stroke: string; svgProps: GlyphSvgProps }) {
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(Animated.sequence([
-      Animated.timing(progress, { toValue: 1, duration: GLYPH_HALF_CYCLE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(progress, { toValue: 0, duration: GLYPH_HALF_CYCLE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(progress, { toValue: 1, duration: GLYPH_HALF_CYCLE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      Animated.timing(progress, { toValue: 0, duration: GLYPH_HALF_CYCLE_MS, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
     ]));
     loop.start();
     return () => loop.stop();
   }, [progress]);
 
-  // 视图坐标 → 屏幕像素（Svg 画在 24 视图盒里，外层容器只有 size 见方）
-  const k = size / GLYPH_VIEWBOX;
-  return <View style={box}>
-    {/* 连线层：以三角形中心为原点整体缩到 45%，端点自然跟着节点走（同 PC 的 .model-glyph-edge） */}
-    <Animated.View style={[glyphLayer, box, {
-      transformOrigin: `${GLYPH_CENTER.x * k}px ${GLYPH_CENTER.y * k}px`,
-      transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, GLYPH_GATHER] }) }],
-    }]}>
-      <Svg width={size} height={size} {...svgProps}>{edges}</Svg>
-    </Animated.View>
-    {GLYPH_NODES.map((node, index) => (
-      <Animated.View key={`${node.cx}-${node.cy}`} style={[glyphLayer, box, {
-        transform: [
-          { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, (GLYPH_CENTER.x - node.cx) * (1 - GLYPH_GATHER) * k] }) },
-          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, (GLYPH_CENTER.y - node.cy) * (1 - GLYPH_GATHER) * k] }) },
-        ],
-      }]}>
-        <Svg width={size} height={size} {...svgProps}>{(nodes as ReactNode[])[index]}</Svg>
-      </Animated.View>
-    ))}
-  </View>;
-}
+  /** 点向三角形中心收拢（同 PC 的 translate 关键帧）：P′ = P + (C - P) × (1 - 收缩比) */
+  const shiftTo = (from: number, to: number) => progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, (to - from) * (1 - GLYPH_GATHER)],
+  });
+  /** 连线层绕三角形中心收缩（等价于 PC 的 transform-origin: 14.33px 12px + scale） */
+  const edgeScale = progress.interpolate({ inputRange: [0, 1], outputRange: [1, GLYPH_GATHER] });
+  /**
+   * 原点要**折进 x/y**，不能写在 originX/originY 上。
+   * 原因：Animated 更新时只下发「带动效的属性」（`__getAnimatedValue()`），静态的 originX/originY 不在其中；
+   * 库拿不到原点就会把缩放原点退化成 viewBox 原点(0,0)——现象是线往左上缩、位置偏移，而不是绕中心直线缩短。
+   * 合成式：T((1-s)·C) ∘ S(s) 恰好等于「绕 C 缩放 s」（见 react-native-svg 的 appendTransform 合成顺序）。
+   */
+  const edgeShift = (center: number) => progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, center * (1 - GLYPH_GATHER)],
+  });
 
-/** 动画分层容器：每层都是 size 见方的绝对定位层，各自做 transform（不吃 StyleSheet——本文件无样式表） */
-const glyphLayer = { position: 'absolute', left: 0, top: 0 } as const;
+  return <Svg width={size} height={size} {...svgProps}>
+    {GLYPH_NODES.map((node) => <AnimatedG key={`${node.cx}-${node.cy}`}
+      x={shiftTo(node.cx, GLYPH_CENTER.x)} y={shiftTo(node.cy, GLYPH_CENTER.y)}>
+      <Circle cx={node.cx} cy={node.cy} r={GLYPH_NODE_R} fill={node.filled ? stroke : 'none'} />
+    </AnimatedG>)}
+    <AnimatedG scale={edgeScale} x={edgeShift(GLYPH_CENTER.x)} y={edgeShift(GLYPH_CENTER.y)}>
+      {GLYPH_EDGES.map((d) => <Path key={d} d={d} />)}
+    </AnimatedG>
+  </Svg>;
+}
 
 // ── 形状数据（24 视图盒 / 16 视图盒，抄自 PC）────────────────
 
@@ -183,7 +200,8 @@ const CHEVRON = <Path d="M3.5 2l3 3-3 3" />;
 
 type IconSpec = {
   defaultSize: number;
-  defaultColor: string;
+  /** 默认色取配色表的键名，由组件内按当前主题解析 */
+  defaultColor: keyof ThemeColors;
   viewBox?: string;
   strokeWidth?: number;
   node: ReactNode;
@@ -191,30 +209,32 @@ type IconSpec = {
 
 /** 非工具类图标的默认尺寸/颜色 + 形状（默认值 = 该图标在 PC 上的语义场景） */
 const ICONS = {
-  brain: { defaultSize: iconSize.tool, defaultColor: colors.toolTitle, node: BRAIN },
-  check: { defaultSize: iconSize.status, defaultColor: colors.success, strokeWidth: 2.5, node: <Path d="M20 6 9 17l-5-5" /> },
+  brain: { defaultSize: iconSize.tool, defaultColor: 'toolTitle', node: BRAIN },
+  check: { defaultSize: iconSize.status, defaultColor: 'success', strokeWidth: 2.5, node: <Path d="M20 6 9 17l-5-5" /> },
   cross: {
-    defaultSize: iconSize.status, defaultColor: colors.danger, strokeWidth: 2.5,
+    defaultSize: iconSize.status, defaultColor: 'danger', strokeWidth: 2.5,
     node: <><Path d="M18 6 6 18" /><Path d="m6 6 12 12" /></>,
   },
-  bot: { defaultSize: iconSize.tool, defaultColor: colors.toolTitle, node: BOT },
-  terminal: { defaultSize: iconSize.tool, defaultColor: colors.toolTitle, node: TERMINAL },
-  alert: { defaultSize: iconSize.card, defaultColor: colors.toolTitle, viewBox: '0 0 16 16', strokeWidth: 1.6, node: ALERT },
-  pin: { defaultSize: iconSize.card, defaultColor: colors.textMuted, viewBox: '0 0 16 16', strokeWidth: 1.3, node: PIN },
-  archive: { defaultSize: iconSize.card, defaultColor: colors.textMuted, viewBox: '0 0 16 16', strokeWidth: 1.3, node: ARCHIVE },
+  bot: { defaultSize: iconSize.tool, defaultColor: 'toolTitle', node: BOT },
+  terminal: { defaultSize: iconSize.tool, defaultColor: 'toolTitle', node: TERMINAL },
+  alert: { defaultSize: iconSize.card, defaultColor: 'toolTitle', viewBox: '0 0 16 16', strokeWidth: 1.6, node: ALERT },
+  pin: { defaultSize: iconSize.card, defaultColor: 'textMuted', viewBox: '0 0 16 16', strokeWidth: 1.3, node: PIN },
+  archive: { defaultSize: iconSize.card, defaultColor: 'textMuted', viewBox: '0 0 16 16', strokeWidth: 1.3, node: ARCHIVE },
 } satisfies Record<string, IconSpec>;
 
 export type IconName = keyof typeof ICONS | 'spinner';
 
 /** 通用图标入口：`<Icon name="brain" size={iconSize.tool} color={colors.textMuted} />` */
 export function Icon({ name, size, color }: { name: IconName; size?: number; color?: string }) {
+  const { colors } = useTheme();
   if (name === 'spinner') return <SpinIcon size={size} color={color} />;
   const spec: IconSpec = ICONS[name];
-  return <Glyph size={size ?? spec.defaultSize} color={color ?? spec.defaultColor} viewBox={spec.viewBox} strokeWidth={spec.strokeWidth}>{spec.node}</Glyph>;
+  return <Glyph size={size ?? spec.defaultSize} color={color ?? colors[spec.defaultColor]} viewBox={spec.viewBox} strokeWidth={spec.strokeWidth}>{spec.node}</Glyph>;
 }
 
 /** 转圈（PC animate-spin 的 RN 版：外层 Animated 旋转） */
-export function SpinIcon({ size = iconSize.card, color = colors.accent }: { size?: number; color?: string }) {
+export function SpinIcon({ size = iconSize.card, color }: { size?: number; color?: string }) {
+  const { colors } = useTheme();
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(spin, {
@@ -228,7 +248,7 @@ export function SpinIcon({ size = iconSize.card, color = colors.accent }: { size
   }, [spin]);
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   return <Animated.View style={{ width: size, height: size, transform: [{ rotate }] }}>
-    <Glyph size={size} color={color} viewBox="0 0 16 16">
+    <Glyph size={size} color={color ?? colors.accent} viewBox="0 0 16 16">
       <Circle cx={8} cy={8} r={6} opacity={0.25} />
       <Path d="M14 8a6 6 0 00-6-6" strokeLinecap="round" />
     </Glyph>
@@ -236,22 +256,25 @@ export function SpinIcon({ size = iconSize.card, color = colors.accent }: { size
 }
 
 /** 折叠箭头：收起（右）/ 展开（下）/ 返回（左） */
-export function ChevronIcon({ size = iconSize.status, color = colors.textMuted, direction = 'right' }: {
+export function ChevronIcon({ size = iconSize.status, color, direction = 'right' }: {
   size?: number;
   color?: string;
   direction?: 'right' | 'down' | 'left';
 }) {
+  const { colors } = useTheme();
   const rotate = direction === 'left' ? '180deg' : direction === 'down' ? '90deg' : '0deg';
   return <View style={{ width: size, height: size, transform: [{ rotate }] }}>
-    <Glyph size={size} color={color} viewBox="0 0 10 10" strokeWidth={1.6}>{CHEVRON}</Glyph>
+    <Glyph size={size} color={color ?? colors.textMuted} viewBox="0 0 10 10" strokeWidth={1.6}>{CHEVRON}</Glyph>
   </View>;
 }
 
 /** 系统卡头部 kind 图标：委派=bot / 后台命令=终端 / 其余=圆圈感叹号 */
-export function SystemKindIcon({ kind, size = iconSize.card, color = colors.toolTitle }: { kind: string; size?: number; color?: string }) {
-  if (kind === 'delegation') return <Icon name="bot" size={size} color={color} />;
-  if (kind === 'shell') return <Icon name="terminal" size={size} color={color} />;
-  return <Icon name="alert" size={size} color={color} />;
+export function SystemKindIcon({ kind, size = iconSize.card, color }: { kind: string; size?: number; color?: string }) {
+  const { colors } = useTheme();
+  const resolved = color ?? colors.toolTitle;
+  if (kind === 'delegation') return <Icon name="bot" size={size} color={resolved} />;
+  if (kind === 'shell') return <Icon name="terminal" size={size} color={resolved} />;
+  return <Icon name="alert" size={size} color={resolved} />;
 }
 
 export type DelegateStatus = 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
@@ -261,6 +284,7 @@ export type DelegateStatus = 'pending' | 'running' | 'completed' | 'failed' | 'a
  * 中止=圆内双竖线(textSecondary，主动停止 ≠ 执行报错) / 待运行=空心圆(60% 灰，区别于中止)
  */
 export function DelegateStatusIcon({ status, size = iconSize.tool }: { status?: DelegateStatus; size?: number }) {
+  const { colors } = useTheme();
   if (status === 'running') return <SpinIcon size={size} />;
   if (status === 'completed') {
     return <Glyph size={size} color={colors.success} viewBox="0 0 16 16" strokeWidth={1.6}>
@@ -332,16 +356,18 @@ function toolIconShape(name: string): ReactNode | null {
 }
 
 /** 工具标题图标（按工具名归类，未知工具不渲染——与 PC 一致） */
-export function ToolIcon({ name, size = iconSize.tool, color = colors.toolTitle }: { name: string; size?: number; color?: string }) {
+export function ToolIcon({ name, size = iconSize.tool, color }: { name: string; size?: number; color?: string }) {
+  const { colors } = useTheme();
   const shape = toolIconShape(name);
   if (!shape) return null;
-  return <Glyph size={size} color={color}>{shape}</Glyph>;
+  return <Glyph size={size} color={color ?? colors.toolTitle}>{shape}</Glyph>;
 }
 
 // ── 输入卡与其它自有图标 ──────────────────────────────
 
 /** 输入卡工具栏图标：模型 / 权限 / 思考等级 */
 export function ComposerIcon({ kind, permission }: { kind: 'model' | 'permission' | 'thinking'; permission?: PermissionMode }) {
+  const { colors } = useTheme();
   const color = kind === 'permission' && permission === 'full' ? colors.permissionOn : colors.textMuted;
   if (kind === 'model') return <ModelGlyph size={15} color={color} />;
   if (kind === 'permission') return <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -355,8 +381,9 @@ export function ComposerIcon({ kind, permission }: { kind: 'model' | 'permission
  * 附件类型图标：图片 / 文档。path 与描边参数抄自 PC `ChatInput.tsx` 附件菜单里的两个内联 svg
  * （`width/height=15`、`viewBox="0 0 16 16"`、`strokeWidth=1.4`）——比工具栏图标的 stroke 2 细一档，照抄不归一。
  */
-export function AttachmentKindIcon({ kind, size = 15, color = colors.textSecondary }: { kind: 'image' | 'doc'; size?: number; color?: string }) {
-  return <Glyph size={size} color={color} viewBox="0 0 16 16" strokeWidth={1.4}>
+export function AttachmentKindIcon({ kind, size = 15, color }: { kind: 'image' | 'doc'; size?: number; color?: string }) {
+  const { colors } = useTheme();
+  return <Glyph size={size} color={color ?? colors.textSecondary} viewBox="0 0 16 16" strokeWidth={1.4}>
     {kind === 'image'
       ? <><Rect x={1.5} y={2.5} width={13} height={11} rx={2} /><Circle cx={5} cy={6} r={1.2} /><Path d="M1.5 11l3.5-3.5 2.5 2.5 3-4 4 5" /></>
       : <><Path d="M3 2h7l4 4v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" /><Path d="M10 2v4h4M6 9h4M6 12h4" /></>}
@@ -365,6 +392,7 @@ export function AttachmentKindIcon({ kind, size = 15, color = colors.textSeconda
 
 /** 发送键图标（停止态是红方块） */
 export function SendIcon({ stop }: { stop: boolean }) {
+  const { colors } = useTheme();
   return <Svg width={stop ? 16 : 14} height={stop ? 16 : 14} viewBox="0 0 16 16" fill="currentColor" color={stop ? colors.danger : colors.textInverse}>
     {stop ? <Rect x={3} y={3} width={10} height={10} rx={1} fill={colors.danger} /> : <Path d="M1 1l14 7-14 7 4-7-4-7z" fill={colors.textInverse} />}
   </Svg>;
@@ -372,5 +400,6 @@ export function SendIcon({ stop }: { stop: boolean }) {
 
 /** 新建会话悬浮按钮图标（圆角气泡 + 加号，与桌面 SessionBar 同源） */
 export function NewChatIcon() {
+  const { colors } = useTheme();
   return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"><Path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" stroke={colors.textInverse} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /><Path d="M8 12h8M12 8v8" stroke={colors.textInverse} strokeWidth={1.8} strokeLinecap="round" /></Svg>;
 }

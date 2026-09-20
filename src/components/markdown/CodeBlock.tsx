@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Clipboard, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, radius, space } from '../../theme/tokens';
+import type { ThemeColors } from '../../theme/tokens';
+import { fontSize, radius, space } from '../../theme/tokens';
+import { useThemedStyles } from '../../theme/theme-context';
 
 const monoFont = Platform.select({ ios: 'Menlo', android: 'monospace' });
 
@@ -15,6 +17,7 @@ const COPIED_RESET_MS = 2000;
  * 语言标识由调用方传入已映射的显示名（见 parse.ts 的 languageLabel，未知回落 TEXT）。
  */
 export const CodeBlock = memo(function CodeBlock({ language, code, last }: { language: string; code: string; last?: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -46,7 +49,7 @@ export const CodeBlock = memo(function CodeBlock({ language, code, last }: { lan
   </View>;
 });
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   block: {
     marginVertical: space.s2,
     borderWidth: StyleSheet.hairlineWidth,

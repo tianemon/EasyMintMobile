@@ -1,7 +1,9 @@
 import { Linking, Platform, StyleSheet, Text } from 'react-native';
 import type { ReactNode } from 'react';
 import type { Token } from 'marked';
-import { colors, fontSize } from '../../theme/tokens';
+import type { ThemeColors } from '../../theme/tokens';
+import { fontSize } from '../../theme/tokens';
+import { useThemedStyles } from '../../theme/theme-context';
 import { decodeEntities, fadeOpacity, safeHref, splitFadeTail } from './parse';
 
 /**
@@ -29,8 +31,9 @@ function openLink(href: string): void {
 }
 
 export function InlineTokens({ tokens, fade }: InlineProps): ReactNode[] {
+  const styles = useThemedStyles(makeStyles);
   const last = tokens.length - 1;
-  return tokens.map((token, index) => renderInline(token, index, !!fade && index === last));
+  return tokens.map((token, index) => renderInline(styles, token, index, !!fade && index === last));
 }
 
 /** marked 的 Token 联合含 `Tokens.Generic`（type: string），switch 窄不到具体成员，子 token 需自己兜底 */
@@ -38,11 +41,14 @@ function childTokens(token: Token): Token[] {
   return 'tokens' in token && token.tokens ? token.tokens : [];
 }
 
+/** 样式表类型：下面这些纯渲染函数不是组件（不适用 hooks），样式一律由调用方传进来 */
+type InlineStyles = ReturnType<typeof makeStyles>;
+
 /**
  * 渐隐只作用于「末尾是纯文本」的情况：末尾若是 `**粗体**` 这类嵌套元素则整体不渐隐——
  * 桌面端 tail-fade 的 HTML 定位同样找不到纯文本段落，两端口径一致。
  */
-function renderInline(token: Token, key: number, fade: boolean): ReactNode {
+function renderInline(styles: InlineStyles, token: Token, key: number, fade: boolean): ReactNode {
   switch (token.type) {
     case 'text':
       return fade ? <FadedText key={key} text={decodeEntities(token.text)} /> : decodeEntities(token.text);
@@ -96,7 +102,7 @@ function FadedText({ text }: { text: string }): ReactNode {
   ];
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   strong: { color: colors.textPrimary, fontWeight: '600' },
   em: { fontStyle: 'italic' },
   del: { textDecorationLine: 'line-through' },

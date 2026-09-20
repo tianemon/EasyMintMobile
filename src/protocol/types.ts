@@ -17,6 +17,7 @@ export type CommandName =
   | 'session.pin'
   | 'session.archive'
   | 'shell.stop'
+  | 'shell.readLog'
   | 'delegation.stop'
   | 'capability.models';
 
@@ -76,10 +77,15 @@ export interface SessionListItem {
 export interface PendingAsk {
   requestId: string;
   sessionId: string;
+  /** 题目（字段与桌面端 ask-store 的 AskQuestion 同形；提问卡按 PC 的单题导航式渲染） */
   questions: Array<{
     id: string;
     question: string;
-    options?: Array<{ value: string; label: string }>;
+    options?: Array<{ value: string; label: string; description?: string; recommended?: boolean }>;
+    /** 多选：勾选不跳题，靠主按钮「下一题/完成」前进 */
+    multi_select?: boolean;
+    /** 级联：{前置问题id: 选项value}，前置选择匹配才显示本问题 */
+    depends_on?: Record<string, string>;
   }>;
   allowCustom: boolean;
   createdAt: number;

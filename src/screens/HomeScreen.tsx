@@ -1,5 +1,5 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Header, headerStyles } from '../components/Header';
+import { Header, makeHeaderStyles } from '../components/Header';
 import { ListRow } from '../components/ListRow';
 import { Icon, iconSize } from '../components/icons';
 import { LoadingView } from '../components/LoadingView';
@@ -7,8 +7,10 @@ import { NewSessionFab } from '../components/NewSessionFab';
 import { ProjectTitle } from '../components/ProjectTitle';
 import { Button } from '../components/Button';
 import type { OpenProject, PcCredential, SessionListItem } from '../protocol/types';
-import { commonStyles } from '../theme/commonStyles';
-import { colors, fontSize, radius, space } from '../theme/tokens';
+import { makeCommonStyles } from '../theme/commonStyles';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, radius, space } from '../theme/tokens';
+import { useThemedStyles } from '../theme/theme-context';
 import type { ConnectionStatus } from '../types';
 
 type HomeScreenProps = {
@@ -32,6 +34,9 @@ type HomeScreenProps = {
 /** 首页：未配对时是配对引导，已配对时是当前项目的会话列表 */
 export function HomeScreen(props: HomeScreenProps) {
   const { credential, pairCode, error, homeLoading, connection, project, sessions } = props;
+  const styles = useThemedStyles(makeStyles);
+  const commonStyles = useThemedStyles(makeCommonStyles);
+  const headerStyles = useThemedStyles(makeHeaderStyles);
   if (!credential || pairCode) {
     return <View style={commonStyles.center}>
       <Text style={styles.logo}>EasyMint</Text><Text style={styles.subtitle}>局域网移动终端</Text>
@@ -53,7 +58,7 @@ export function HomeScreen(props: HomeScreenProps) {
   </View>;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   logo: { fontSize: fontSize.display, fontWeight: '800', color: colors.textPrimary, letterSpacing: -1 },
   subtitle: { fontSize: fontSize.md, color: colors.textMuted, marginTop: -10 },
   codeCard: { width: '100%', maxWidth: 420, borderRadius: radius.lg, backgroundColor: colors.successBg, padding: 28, alignItems: 'center', gap: space.s2 },

@@ -5,7 +5,8 @@ import { Icon, iconSize } from '../components/icons';
 import { NewSessionFab } from '../components/NewSessionFab';
 import { ConnectionIndicator, ProjectTitle } from '../components/ProjectTitle';
 import type { OpenProject, SessionListItem } from '../protocol/types';
-import { commonStyles } from '../theme/commonStyles';
+import { makeCommonStyles } from '../theme/commonStyles';
+import { useThemedStyles } from '../theme/theme-context';
 import type { ConnectionStatus } from '../types';
 
 type SessionsScreenProps = {
@@ -22,6 +23,7 @@ type SessionsScreenProps = {
 /** 某个项目下的会话列表（含归档会话） */
 export function SessionsScreen(props: SessionsScreenProps) {
   const { project, connection, sessions } = props;
+  const commonStyles = useThemedStyles(makeCommonStyles);
   return <View style={[commonStyles.fill, commonStyles.sessionsPage]}>
     <Header title={<ProjectTitle name={project?.name ?? '选择项目'} status={connection} onPress={props.onSwitchProject} />} onBack={props.onBack} right={<ConnectionIndicator status={connection} />} />
     <FlatList data={sessions} keyExtractor={(item) => item.sessionId} contentContainerStyle={commonStyles.list}

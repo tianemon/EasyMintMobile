@@ -2,7 +2,9 @@ import { memo, useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import type { ReactNode } from 'react';
 import type { Token, Tokens } from 'marked';
-import { colors, fontSize, space } from '../../theme/tokens';
+import type { ThemeColors } from '../../theme/tokens';
+import { fontSize, space } from '../../theme/tokens';
+import { useThemedStyles } from '../../theme/theme-context';
 import { CodeBlock } from './CodeBlock';
 import { InlineTokens } from './inline';
 import { languageLabel, lexMarkdown, splitMarkdownParts, splitStableBlocks, trimCodeBody } from './parse';
@@ -45,8 +47,9 @@ export const MarkdownView = memo(function MarkdownView({ text, fadeTail }: Markd
  * trim：只有整条消息的最后一块才收尾边距（对齐桌面端 `[&_p:last-child]:mb-0`）。
  */
 const MarkdownSegment = memo(function MarkdownSegment({ markdown, fade, trim }: { markdown: string; fade: boolean; trim: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   const blocks = useMemo(() => lexMarkdown(markdown).filter(isVisible), [markdown]);
-  return <>{renderBlocks(blocks, fade, false, trim)}</>;
+  return <>{renderBlocks(styles, blocks, fade, false, trim)}</>;
 });
 
 function buildRows(text: string, fadeTail: boolean): Row[] {
@@ -79,13 +82,16 @@ function blockTokens(token: Token): Token[] {
   return 'tokens' in token && token.tokens ? token.tokens : [];
 }
 
+/** 样式表类型：下面这些纯渲染函数不是组件（不适用 hooks），样式一律由调用方传进来 */
+type MarkdownStyles = ReturnType<typeof makeStyles>;
+
 /** 块级 token → 元素。fade 只作用于最后一块的末尾纯文本；trim 去掉最后一块的收尾边距（只给整条消息的最后一块） */
-function renderBlocks(tokens: Token[], fade: boolean, quote = false, trim = false): ReactNode[] {
+function renderBlocks(styles: MarkdownStyles, tokens: Token[], fade: boolean, quote = false, trim = false): ReactNode[] {
   const last = tokens.length - 1;
-  return tokens.map((token, index) => renderBlock(token, index, fade && index === last, quote, trim && index === last));
+  return tokens.map((token, index) => renderBlock(styles, token, index, fade && index === last, quote, trim && index === last));
 }
 
-function renderBlock(token: Token, key: number, fade: boolean, quote: boolean, last: boolean): ReactNode {
+function renderBlock(styles: MarkdownStyles, token: Token, key: number, fade: boolean, quote: boolean, last: boolean): ReactNode {
   // marked 的 Token 联合带 `Tokens.Generic`（type: string），switch 窄不到具体成员——
   // list/table 两处按已确认的 token.type 断言到具体类型
   switch (token.type) {
@@ -102,51 +108,51 @@ function renderBlock(token: Token, key: number, fade: boolean, quote: boolean, l
       // 围栏代码块在 parse.ts 已摘成独立 Row；这里只会遇到缩进代码块（无语言标识）
       return <CodeBlock key={key} language={languageLabel(token.lang)} code={trimCodeBody(token.text)} />;
     case 'blockquote':
-      return <View key={key} style={styles.quote}>{renderBlocks(blockTokens(token).filter(isVisible), fade, true)}</View>;
+      return <View key={key} style={styles.quote}>{renderBlocks(styles, blockTokens(token).filter(isVisible), fade, true)}</View>;
     case 'list':
-      return <View key={key} style={styles.list}>{renderListItems(token as Tokens.List, fade, quote)}</View>;
+      return <View key={key} style={styles.list}>{renderListItems(styles, token as Tokens.List, fade, quote)}</View>;
     case 'table':
-      return renderTable(key, token as Tokens.Table, fade);
+      return renderTable(styles, key, token as Tokens.Table, fade);
     case 'hr':
       return <View key={key} style={styles.hr} />;
     case 'html':
       return <Text key={key} selectable={textSelectable} style={[styles.paragraph, quote && styles.quoteText, last && styles.blockLast]}>{token.text}</Text>;
     default:
       return 'tokens' in token && token.tokens
-        ? <View key={key}>{renderBlocks(token.tokens.filter(isVisible), fade, quote)}</View>
+        ? <View key={key}>{renderBlocks(styles, token.tokens.filter(isVisible), fade, quote)}</View>
         : null;
   }
 }
 
-function renderListItems(list: Tokens.List, fade: boolean, quote: boolean): ReactNode[] {
+function renderListItems(styles: MarkdownStyles, list: Tokens.List, fade: boolean, quote: boolean): ReactNode[] {
   const start = typeof list.start === 'number' ? list.start : 1;
   return list.items.map((item, index) => <View key={index} style={styles.listItem}>
     <Text style={[styles.marker, list.ordered ? styles.markerOrdered : styles.markerBullet]}>
       {list.ordered ? `${start + index}.` : '•'}
     </Text>
     <View style={styles.listItemBody}>
-      {renderBlocks(item.tokens.filter(isVisible), fade && index === list.items.length - 1, quote)}
+      {renderBlocks(styles, item.tokens.filter(isVisible), fade && index === list.items.length - 1, quote)}
     </View>
   </View>);
 }
 
-function renderTable(key: number, table: Tokens.Table, fade: boolean): ReactNode {
+function renderTable(styles: MarkdownStyles, key: number, table: Tokens.Table, fade: boolean): ReactNode {
   const lastRow = table.rows.length - 1;
   return <View key={key} style={styles.table}>
     <View style={styles.tableRow}>
-      {table.header.map((cell, index) => <Text key={index} style={[styles.tableCell, styles.tableHeadCell, alignStyle(cell.align)]}>
+      {table.header.map((cell, index) => <Text key={index} style={[styles.tableCell, styles.tableHeadCell, alignStyle(styles, cell.align)]}>
         <InlineTokens tokens={cell.tokens} />
       </Text>)}
     </View>
     {table.rows.map((row, rowIndex) => <View key={rowIndex} style={styles.tableRow}>
-      {row.map((cell, cellIndex) => <Text key={cellIndex} style={[styles.tableCell, alignStyle(cell.align)]}>
+      {row.map((cell, cellIndex) => <Text key={cellIndex} style={[styles.tableCell, alignStyle(styles, cell.align)]}>
         <InlineTokens tokens={cell.tokens} fade={fade && rowIndex === lastRow && cellIndex === row.length - 1} />
       </Text>)}
     </View>)}
   </View>;
 }
 
-function alignStyle(align: 'center' | 'left' | 'right' | null) {
+function alignStyle(styles: MarkdownStyles, align: 'center' | 'left' | 'right' | null) {
   return align === 'center' ? styles.cellCenter : align === 'right' ? styles.cellRight : undefined;
 }
 
@@ -163,7 +169,7 @@ const HEADING_STYLES = [
   { fontSize: fontSize.body, lineHeight: 22, marginTop: space.s3, marginBottom: space.s1 },
 ];
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   paragraph: { color: colors.textPrimary, fontSize: fontSize.body, lineHeight: 22, marginBottom: space.s3 },
   /** 整条消息的最后一块：不收尾边距，避免气泡底部比顶部多出一段空白 */
   blockLast: { marginBottom: 0 },

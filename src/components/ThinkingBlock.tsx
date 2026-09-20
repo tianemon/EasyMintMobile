@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { colors, fontSize, radius } from '../theme/tokens';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, radius } from '../theme/tokens';
+import { useTheme, useThemedStyles } from '../theme/theme-context';
 import { ChevronIcon, Icon, SpinIcon, iconSize } from './icons';
 import { fadeOpacity, splitFadeTail } from './markdown/parse';
 
@@ -72,6 +74,8 @@ type ThinkingBlockProps = {
 /** 思考过程块：streaming 时自动展开跟随输出，模型进入正文后自动折叠（用户手动操作过则不再自动改） */
 export function ThinkingBlock({ content, active, onInnerScrollGesture }: ThinkingBlockProps) {
   const [expanded, setExpanded] = useState(false);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const userControlled = useRef(false);
   const previousActive = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -153,7 +157,7 @@ export function ThinkingBlock({ content, active, onInnerScrollGesture }: Thinkin
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   block: { marginTop: 6, marginBottom: 4 },
   // 标题行 inline、gap 6、上下 2px，无底色无边框（PC 的 button）
   header: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, paddingVertical: 2 },

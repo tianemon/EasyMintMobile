@@ -39,12 +39,33 @@ const TOOL_LABELS: Record<string, string> = {
 
 /** 工具卡标题行文案：动作词 + 关键参数（命令 / 文件 / 查询词） */
 export function toolDisplay(tool: DisplayToolBlock): string {
-  const name = tool.name.toLowerCase();
-  // 与 PC 同口径：未收录的工具按 MCP / 工具 两类退化，不直接显示英文名
-  const label = TOOL_LABELS[name] ?? (name.startsWith('mcp__') ? 'MCP' : '工具');
+  const label = toolLabel(tool.name);
   const input = tool.input ?? {};
   const detail = input.command ?? input.file_path ?? input.path ?? input.query ?? input.url ?? input.description;
   return typeof detail === 'string' && detail.trim() ? `${label} · ${detail.trim()}` : label;
+}
+
+/** 工具名 → 动作词（未收录按 MCP / 工具 两类退化，不直接显示英文名——与 PC 同口径） */
+export function toolLabel(name: string): string {
+  const normalized = name.toLowerCase();
+  return TOOL_LABELS[normalized] ?? (normalized.startsWith('mcp__') ? 'MCP' : '工具');
+}
+
+/** 命令类工具（bash / powershell 等）：这些工具在 PC 上走「命令块 + 输出」的展开区，不把命令塞进标题 */
+export function isCommandTool(name: string): boolean {
+  return /^(bash|powershell|sh|zsh|shell)$/i.test(name);
+}
+
+/** bash 命令文本（PC 的 getBashCommand：input 可能是纯字符串或 { command }；这里只取对象形态） */
+export function toolCommand(input: Record<string, unknown> | undefined): string {
+  const value = input?.command;
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** bash 动作标题（Mint 调用时填的 description）——缺失返回空串，标题行就不显示（PC 同款） */
+export function toolDescription(input: Record<string, unknown> | undefined): string {
+  const value = input?.description;
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 /** 系统消息 kind → 标签（与电脑端 customType 语义对应） */

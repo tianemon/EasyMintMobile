@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, space } from '../theme/tokens';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, space } from '../theme/tokens';
+import { useTheme, useThemedStyles } from '../theme/theme-context';
 import { ChevronIcon, iconSize } from './icons';
 
 type HeaderProps = {
@@ -11,6 +13,8 @@ type HeaderProps = {
 
 /** 页面标题栏：左返回 / 中标题（字符串或自定义节点）/ 右操作 */
 export function Header({ title, onBack, right }: HeaderProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeHeaderStyles);
   return (
     <View style={styles.header}>
       <Pressable style={styles.headerSide} onPress={onBack} disabled={!onBack}>
@@ -23,8 +27,9 @@ export function Header({ title, onBack, right }: HeaderProps) {
   );
 }
 
-/** 标题栏样式：同时供页面自定义右侧操作（如首页「设置」）复用，保证与 Header 同一套值 */
-export const headerStyles = StyleSheet.create({
+/** 标题栏样式：同时供页面自定义右侧操作（如首页「设置」）复用，保证与 Header 同一套值。
+ *  取用方式：`const headerStyles = useThemedStyles(makeHeaderStyles)` */
+export const makeHeaderStyles = (colors: ThemeColors) => StyleSheet.create({
   header: { height: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.divider, paddingHorizontal: space.s3, backgroundColor: colors.content },
   headerSide: { width: 88 },
   headerBack: { flexDirection: 'row', alignItems: 'center', gap: 3 },
@@ -32,5 +37,3 @@ export const headerStyles = StyleSheet.create({
   headerAction: { color: colors.accent, fontSize: fontSize.base, fontWeight: '600' },
   headerTitle: { flex: 1, textAlign: 'center', fontWeight: '700', fontSize: fontSize.title, color: colors.textPrimary },
 });
-
-const styles = headerStyles;

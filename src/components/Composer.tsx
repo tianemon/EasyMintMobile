@@ -4,8 +4,10 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import type { ModelCapabilities, PermissionMode } from '../protocol/types';
 import type { AttachmentKind, DraftAttachment } from '../session/attachments';
 import { THINKING_LABELS } from '../session/thinking';
-import { commonStyles } from '../theme/commonStyles';
-import { colors, fontSize, radius, shadow, space } from '../theme/tokens';
+import { makeCommonStyles } from '../theme/commonStyles';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, radius, space } from '../theme/tokens';
+import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { ComposerControl } from '../types';
 import { AttachmentKindIcon, ComposerIcon, Icon, SendIcon, iconSize } from './icons';
 
@@ -70,10 +72,21 @@ function formatTokenWindow(tokens: number): string {
  * memo：流式期间 App 每帧重渲染，props 未变时跳过整块输入卡（调用方需传稳定 props，见 App 的 composer）。
  */
 export const Composer = memo(function Composer(props: ComposerProps) {
+  const { colors, shadow } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const commonStyles = useThemedStyles(makeCommonStyles);
   const { draft, running, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, contextWindow, control, attachments } = props;
   const [showContextTip, setShowContextTip] = useState(false);
   const contextTipText = contextTip(contextPercent, contextWindow);
-  const sendDisabled = running && !hasSession ? true : (!running && !draft.trim() && attachments.length === 0);
+  /** 有内容可发（正文或附件） */
+  const hasContent = !!draft.trim() || attachments.length > 0;
+  /**
+   * 与 PC ChatInput 同口径：**busy 时有输入就是发送**（走 steer 插话打断），
+   * 只有「忙碌且输入为空」才让位给打断键。早先手机端 busy 时无论有没有输入都显示打断，
+   * 导致想插话只能先停掉任务。
+   */
+  const showStop = running && hasSession && !hasContent;
+  const sendDisabled = !showStop && !hasContent;
   return <View style={[styles.composerCard, shadow.sm]}>
     {!!attachments.length && <View style={styles.attachmentPreview}>{attachments.map((attachment) => <View key={attachment.id} style={styles.attachmentItem}>
       {attachment.kind === 'image'
@@ -83,7 +96,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
         <Icon name="cross" size={10} color={colors.textSecondary} />
       </Pressable>
     </View>)}</View>}
-    <TextInput value={draft} onChangeText={props.onDraftChange} placeholder={running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'} multiline style={styles.composerInput} />
+    {/* 占位色必须显式给：Android 主题是 DayNight，系统深色下原生 hint 色接近白，白底卡片上会看不见 */}
+    <TextInput value={draft} onChangeText={props.onDraftChange} placeholder={running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'} placeholderTextColor={colors.textMuted} multiline style={styles.composerInput} />
     <View style={styles.composerToolbar}>
       {/* 回形针：与模型/权限/思考共用 control 槽位，展开互斥（打开附件菜单会收起另三个） */}
       <Pressable accessibilityLabel="添加附件" accessibilityState={{ expanded: control === 'attachment' }}
@@ -111,11 +125,11 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             strokeDasharray={RING_CIRCUMFERENCE}
             strokeDashoffset={contextPercent === null ? RING_CIRCUMFERENCE : RING_CIRCUMFERENCE * (1 - contextPercent / 100)} />
         </Svg>
-        {showContextTip && <View style={styles.contextTip}><Text numberOfLines={1} style={styles.contextTipText}>{contextTipText}</Text></View>}
+        {showContextTip && <View style={[styles.contextTip, shadow.sm]}><Text numberOfLines={1} style={styles.contextTipText}>{contextTipText}</Text></View>}
       </Pressable>
-      <Pressable disabled={sendDisabled} onPress={() => running && hasSession ? props.onStop() : props.onSend()}
-        style={({ pressed }) => [styles.sendButton, (pressed || sendDisabled) && commonStyles.dim, running && styles.stopButton]}>
-        <SendIcon stop={running && hasSession} />
+      <Pressable disabled={sendDisabled} onPress={() => showStop ? props.onStop() : props.onSend()}
+        style={({ pressed }) => [styles.sendButton, (pressed || sendDisabled) && commonStyles.dim, showStop && styles.stopButton]}>
+        <SendIcon stop={showStop} />
       </Pressable>
     </View>
     {/* 附件菜单：两个整行按钮上下排布（图片在上、文档在下），不套列表行的样式——
@@ -147,7 +161,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   </View>;
 });
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   composerCard: { margin: space.s4, marginTop: 6, marginBottom: 26, padding: space.s1, borderRadius: radius.lg, backgroundColor: colors.elevated },
   composerInput: { minHeight: 52, maxHeight: 130, paddingHorizontal: space.s3, paddingTop: 10, paddingBottom: 6, color: colors.textPrimary, fontSize: fontSize.base, lineHeight: 22, textAlignVertical: 'top' },
   composerToolbar: { minHeight: 38, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -158,7 +172,7 @@ const styles = StyleSheet.create({
   // PC 的 .ctx-ring svg：整体旋转 -90°，让进度从 12 点方向起画
   contextRingSvg: { transform: [{ rotate: '-90deg' }] },
   // 锚在左侧向右生长：圆环左边只剩约 100px，靠右锚定会把文字撩出屏幕外
-  contextTip: { position: 'absolute', bottom: 32, left: -8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.elevated, ...shadow.sm },
+  contextTip: { position: 'absolute', bottom: 32, left: -8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.elevated },
   contextTipText: { color: colors.textPrimary, fontSize: fontSize.caption, fontWeight: '600' },
   sendButton: { marginLeft: 2, marginRight: 6, width: 32, height: 32, borderRadius: radius.lg, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   stopButton: { backgroundColor: colors.dangerBg },

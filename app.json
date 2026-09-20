@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/brand/appicon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.easymint.mobile",
@@ -40,6 +40,9 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#F4F4F2",
+          "dark": {
+            "backgroundColor": "#141414"
+          },
           "image": "./assets/brand/appicon-light.png",
           "imageWidth": 112,
           "resizeMode": "contain"

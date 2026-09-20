@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { commonStyles } from '../theme/commonStyles';
-import { colors, fontSize, radius } from '../theme/tokens';
+import { makeCommonStyles } from '../theme/commonStyles';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, radius } from '../theme/tokens';
+import { useThemedStyles } from '../theme/theme-context';
 
 type ButtonProps = {
   label: string;
@@ -11,6 +13,8 @@ type ButtonProps = {
 };
 
 export function Button({ label, onPress, secondary = false, danger = false, disabled = false }: ButtonProps) {
+  const styles = useThemedStyles(makeStyles);
+  const commonStyles = useThemedStyles(makeCommonStyles);
   return (
     <Pressable disabled={disabled} onPress={onPress}
       style={({ pressed }) => [styles.button, secondary && styles.buttonSecondary,
@@ -20,7 +24,7 @@ export function Button({ label, onPress, secondary = false, danger = false, disa
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   button: { minHeight: 46, paddingHorizontal: 18, borderRadius: radius.lg, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   buttonSecondary: { backgroundColor: colors.inputField },
   buttonDanger: { backgroundColor: colors.danger },

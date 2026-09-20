@@ -3,8 +3,10 @@ import { useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
-import { commonStyles } from '../theme/commonStyles';
-import { colors, fontSize, radius, space } from '../theme/tokens';
+import { makeCommonStyles } from '../theme/commonStyles';
+import type { ThemeColors } from '../theme/tokens';
+import { fontSize, radius, space } from '../theme/tokens';
+import { useThemedStyles } from '../theme/theme-context';
 
 type ScannerScreenProps = {
   onCancel: () => void;
@@ -16,6 +18,8 @@ export function ScannerScreen({ onCancel, onScanned }: ScannerScreenProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const insets = useSafeAreaInsets();
   const locked = useRef(false);
+  const styles = useThemedStyles(makeStyles);
+  const commonStyles = useThemedStyles(makeCommonStyles);
   if (!permission) return <View style={commonStyles.center}><ActivityIndicator /></View>;
   if (!permission.granted) {
     return (
@@ -43,8 +47,8 @@ export function ScannerScreen({ onCancel, onScanned }: ScannerScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   scannerOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'space-between', padding: space.s8 },
-  scannerTitle: { color: colors.textInverse, fontSize: fontSize.xl, fontWeight: '700', marginTop: 20, textShadowColor: colors.black, textShadowRadius: 4 },
+  scannerTitle: { color: colors.scanOverlayText, fontSize: fontSize.xl, fontWeight: '700', marginTop: 20, textShadowColor: colors.black, textShadowRadius: 4 },
   scanFrame: { width: 250, height: 250, borderWidth: 3, borderColor: colors.scanFrameBorder, borderRadius: radius.lg },
 });
