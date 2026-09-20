@@ -1,5 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
 
 export type AttachmentKind = 'image' | 'doc';
 
@@ -19,17 +20,65 @@ export type DraftAttachment = {
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 const MAX_ATTACHMENT_COUNT = 10;
-const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'];
+/** 只选文档：图片改由系统相册选（见 pickImages），所以这里不再列图片类型 */
 const DOCUMENT_TYPES = [
   'application/pdf', 'text/*', 'application/json', 'application/xml',
   'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
 
+function newAttachmentId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * 按 base64 的实际内容定图片类型（实测各格式的前缀：JPEG `/9j/`、PNG `iVBOR`、GIF `R0lG`、WEBP `UklGR`）。
+ * 不能只信 asset.mimeType：iOS 选相册里的 HEIC 时系统会把数据转成 JPEG，而 mimeType 可能仍报原类型，
+ * 声明与实际不符会让手机端的预览和桌面端的 Pi 都按错误类型处理。
+ */
+function sniffImageMime(data: string): string | undefined {
+  if (data.startsWith('/9j/')) return 'image/jpeg';
+  if (data.startsWith('iVBOR')) return 'image/png';
+  if (data.startsWith('R0lG')) return 'image/gif';
+  if (data.startsWith('UklGR')) return 'image/webp';
+  return undefined;
+}
+
+/**
+ * 选图走**系统相册**：iOS 是 PHPicker、Android 是系统 Photo Picker/相册。
+ * 不能用 DocumentPicker —— 那条路打开的是 iOS「文件」App 与 Android 的 SAF 文件浏览器，里面看不到相册照片。
+ * base64 由系统直接给出（iOS 上 HEIC 会被转成 JPEG），不需要我们自己读文件，也不落盘。
+ */
+async function pickImages(): Promise<DraftAttachment[]> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    // 不传 quality（默认 1.0）：iOS 选 PNG 本来就不重编码、照片保持原质量；体积交给下面的 15 MB 上限兜底
+    base64: true,
+  });
+  if (result.canceled) return [];
+  return result.assets.map((asset) => {
+    const label = asset.fileName ?? '图片';
+    const data = asset.base64;
+    if (!data) throw new Error(`${label} 读取失败`);
+    // 判据用实际要发出去的那串 base64 解出的字节数（桌面端是按解码后的 buffer 判 15 MB 的，判据要对齐）
+    const bytes = Math.floor(data.length * 0.75);
+    if (bytes > MAX_FILE_BYTES) throw new Error(`${label} 超过 15 MB`);
+    return {
+      id: newAttachmentId(),
+      name: asset.fileName ?? `image-${Date.now()}.jpg`,
+      kind: 'image',
+      mimeType: sniffImageMime(data) ?? asset.mimeType ?? 'image/jpeg',
+      size: bytes,
+      data,
+    };
+  });
+}
+
 /** 系统文件选择器 → 内存 base64；读取后立即删除 DocumentPicker 创建的临时副本。 */
-export async function pickAttachments(kind: AttachmentKind): Promise<DraftAttachment[]> {
+async function pickDocuments(): Promise<DraftAttachment[]> {
   const result = await DocumentPicker.getDocumentAsync({
-    type: kind === 'image' ? IMAGE_TYPES : DOCUMENT_TYPES,
+    type: DOCUMENT_TYPES,
     multiple: true,
     copyToCacheDirectory: true,
   });
@@ -45,10 +94,10 @@ export async function pickAttachments(kind: AttachmentKind): Promise<DraftAttach
       const bytes = asset.size ?? Math.floor(data.length * 0.75);
       if (bytes > MAX_FILE_BYTES) throw new Error(`${asset.name} 超过 15 MB`);
       picked.push({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: newAttachmentId(),
         name: asset.name,
-        kind,
-        mimeType: asset.mimeType ?? (kind === 'image' ? 'image/jpeg' : 'application/octet-stream'),
+        kind: 'doc',
+        mimeType: asset.mimeType ?? 'application/octet-stream',
         size: bytes,
         data,
       });
@@ -58,6 +107,11 @@ export async function pickAttachments(kind: AttachmentKind): Promise<DraftAttach
     }
   }
   return picked;
+}
+
+/** 图片走系统相册，文档走系统文件选择器 */
+export async function pickAttachments(kind: AttachmentKind): Promise<DraftAttachment[]> {
+  return kind === 'image' ? pickImages() : pickDocuments();
 }
 
 /**

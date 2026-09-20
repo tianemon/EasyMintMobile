@@ -52,10 +52,19 @@
         "expo-camera",
         {
           "cameraPermission": "允许 EasyMint 扫描电脑端的配对二维码",
-          "recordAudioAndroid": false
+          "recordAudioAndroid": false,
+          "microphonePermission": false
         }
       ],
       "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 EasyMint 访问相册，把选中的图片发送给电脑端",
+          "cameraPermission": "允许 EasyMint 扫描电脑端的配对二维码",
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-build-properties",
         {
