@@ -1,0 +1,90 @@
+name: Build & Release
+
+# 发版：推 v* tag 触发，构建安卓 APK 并挂到 GitHub Release。
+# 本次只发安卓——iOS 需要 Apple 签名（免费个人团队 7 天有效、且要登记设备 UDID），
+# 不适合放在 CI 里发，仍然走本地 `npm run ios` / `npm run ipa`。
+#
+# 版本号唯一来源是 app.json 的 expo.version，与 tag 必须一致（下面有一步会校验）。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-notes:
+    runs-on: ubuntu-latest
+    outputs:
+      notes: ${{ steps.extract.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Extract changelog for tag
+        id: extract
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          # v0.1.0 → 0.1.0（CHANGELOG 标题兼容两种格式：## v0.1.0 与 ## [v0.1.0]。
+          # 字面 [ 用字符类 [[] 匹配——POSIX 写法，BSD/GNU awk 均支持）
+          VERSION="${TAG#v}"
+          NOTES=$(awk -v v="$VERSION" '
+            $0 ~ "^## v" v " " || $0 ~ "^## [[]v" v "[]] " { found=1; next }
+            found && ($0 ~ "^## v" || $0 ~ "^## [[]v") { exit }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $TAG"
+          fi
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+  build-android:
+    needs: prepare-notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          # 与本地能编通的那套一致（openjdk 21.0.11）
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tag 与 app.json 版本不一致会发出一个版本号与内容对不上的包，这里直接拦住
+      - name: Check tag matches app.json version
+        shell: bash
+        run: |
+          APP_VERSION=$(node -p "require('./app.json').expo.version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$APP_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME 与 app.json 的版本 $APP_VERSION 不一致"
+            exit 1
+          fi
+          echo "版本校验通过：$APP_VERSION"
+
+      # 复用仓库里的打包脚本，与本地 `npm run apk` 完全同一条链路：
+      # 它会自行判断是否需要 expo prebuild（哈希标记）、并注入 Android SDK 路径。
+      # GitHub 的 ubuntu runner 已预装 Android SDK，ANDROID_HOME / ANDROID_SDK_ROOT 现成。
+      # 只编 arm64-v8a（脚本默认）：手机都是 arm64，四架构一起编会让原生编译量与包体翻几倍。
+      - name: Build APK
+        run: npm run apk
+
+      # 本地产物名带时间戳（apk/EasyMint-yyyyMMddHHmmss.apk）；Release 附件改成带版本号，方便下载辨识
+      - name: Rename APK for release
+        run: cp apk/EasyMint-*.apk "EasyMint-${GITHUB_REF_NAME}.apk"
+
+      - name: Upload artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ needs.prepare-notes.outputs.notes }}
+          files: EasyMint-*.apk

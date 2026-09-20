@@ -41,6 +41,9 @@ yarn-error.*
 # 本地助手的工作目录（项目记忆、日志），不入库
 .workbuddy/
 
+# EasyMint harness 的本地固化命令，不入库
+.easymint/
+
 # local env files
 .env*.local
 
