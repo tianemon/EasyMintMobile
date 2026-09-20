@@ -35,7 +35,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "apk": "node scripts/build-apk.mjs",
-    "ios": "expo run:ios",
+    "ios": "node scripts/install-ios.mjs",
+    "ipa": "node scripts/build-ipa.mjs",
     "web": "expo start --web",
     "check": "tsc --noEmit && expo-doctor"
   },
