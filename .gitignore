@@ -13,10 +13,15 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+
+# Firebase 配置（含项目 ID 与 API key）
+google-services.json
+GoogleService-Info.plist
 
 # Metro
 .metro-health-check*
@@ -45,7 +50,10 @@ yarn-error.*
 .easymint/
 
 # local env files
-.env*.local
+# 模板文件（.env.example）仍可入库，其余 .env* 一律不进仓库
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
