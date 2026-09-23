@@ -161,7 +161,10 @@ export function snapshotMessagesWithBuffer(snapshot: SessionSnapshot, duringRequ
   const running = !ended && (snapshot.status !== 'idle' && snapshot.status !== 'stopped' || currentTurn.some((event) => event.type === 'turn_start'));
   if (lastFrame) {
     const blocks = contentBlocks(lastFrame.blocks);
-    const alreadyInHistory = messages.some((message) => message.role === 'assistant' && JSON.stringify(message.blocks) === JSON.stringify(blocks));
+    // 只与本轮提问之后已落盘的回答比较；更早回合恰好说了同一句话也应显示本轮气泡。
+    const latestUserIndex = messages.findIndex((message) => message.role === 'user');
+    const currentRunHistory = latestUserIndex < 0 ? messages : messages.slice(0, latestUserIndex);
+    const alreadyInHistory = currentRunHistory.some((message) => message.role === 'assistant' && JSON.stringify(message.blocks) === JSON.stringify(blocks));
     if (blocks.length && !alreadyInHistory) {
       messages.unshift({ id: `stream-recovered-${String(lastFrame.chatId ?? 'run')}-${String(lastFrame.eventSequence)}`,
         role: 'assistant', blocks, streaming: running && lastFrame.partial !== false });

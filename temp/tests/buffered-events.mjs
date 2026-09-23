@@ -38,3 +38,17 @@ test('turn_end during snapshot request clears running and keeps the last frame v
   assert.equal(recovered.messages[0].streaming, false);
   assert.deepEqual(recovered.messages[0].blocks, [{ kind: 'text', text: 'final' }]);
 });
+
+test('same text in an older answer does not hide the current streaming answer', () => {
+  const repeated = {
+    ...snapshot,
+    messages: [
+      { type: 'assistant', uuid: 'old', message: { content: [{ type: 'text', text: '好的' }] } },
+      { type: 'user', uuid: 'new', message: { content: [{ type: 'text', text: '再说一次' }] } },
+    ],
+    bufferedEvents: [{ type: 'message', eventSequence: 12, partial: true, chatId: 'current', blocks: [{ type: 'text', text: '好的' }] }],
+  };
+  const recovered = snapshotMessagesWithBuffer(repeated, []);
+  assert.equal(recovered.messages.length, 3);
+  assert.equal(recovered.messages[0].streaming, true);
+});
