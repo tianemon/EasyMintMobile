@@ -1,7 +1,7 @@
-// Run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test temp/tests/buffered-events.mjs
+// Run: npm test（node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test "tests/**/*.test.mjs"）
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { snapshotMessagesWithBuffer } from '../../src/session/messages.ts';
+import { snapshotMessagesWithBuffer } from '../src/session/messages.ts';
 
 const snapshot = {
   session: { sessionId: 's', title: 'test' },
@@ -51,4 +51,22 @@ test('same text in an older answer does not hide the current streaming answer', 
   const recovered = snapshotMessagesWithBuffer(repeated, []);
   assert.equal(recovered.messages.length, 3);
   assert.equal(recovered.messages[0].streaming, true);
+});
+
+// 对端老版本可能不带 bufferedEvents；缺字段时必须当空数组处理，不能把 undefined 展开成异常
+test('a snapshot without bufferedEvents does not throw', () => {
+  const { bufferedEvents: omitted, ...withoutBuffer } = snapshot;
+  assert.ok(Array.isArray(omitted)); // 前置：确认真的把字段摘掉了
+  const recovered = snapshotMessagesWithBuffer(withoutBuffer, []);
+  assert.equal(recovered.running, true);
+  assert.equal(recovered.messages.length, 1);
+});
+
+// 同一序号同时来自缓冲与实时流时保留先到的那份（= 缓冲里的）。去重若不生效，最后帧会变成 'live 12'
+test('duplicate eventSequence arriving from both sources keeps the earlier copy', () => {
+  const recovered = snapshotMessagesWithBuffer(
+    { ...snapshot, eventSequence: 11 },
+    [{ type: 'message', eventSequence: 12, blocks: [{ type: 'text', text: 'live 12' }], partial: true }],
+  );
+  assert.deepEqual(recovered.messages[0].blocks, [{ kind: 'text', text: 'partial 2' }]);
 });

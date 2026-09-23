@@ -142,15 +142,20 @@ export function snapshotMessages(snapshot: SessionSnapshot): DisplayMessage[] {
   return messages.reverse();
 }
 
-/** 快照生成期间漏过的实时帧按应用事件序号补齐；同一累计帧只取最新内容。 */
+/** 快照生成期间漏过的实时帧按应用事件序号补齐；同一应用事件序号只保留先到的那一份。 */
 export function snapshotMessagesWithBuffer(snapshot: SessionSnapshot, duringRequest: unknown[]): { messages: DisplayMessage[]; running: boolean } {
   const messages = snapshotMessages(snapshot);
   const cursor = snapshot.eventSequence ?? -1;
+  // bufferedEvents 兜底成数组：对端老版本可能不带这个字段，直接展开 undefined 会抛 TypeError（整页白屏）。
+  // 同函数里 eventSequence 已用 ?? -1 兜底，这里保持同等防护。
+  const buffered = Array.isArray(snapshot.bufferedEvents) ? snapshot.bufferedEvents : [];
   const events = [
-    ...(snapshot.status !== 'idle' && snapshot.status !== 'stopped' ? snapshot.bufferedEvents : []),
+    ...(snapshot.status !== 'idle' && snapshot.status !== 'stopped' ? buffered : []),
     ...duringRequest.filter((value) => Number(object(value).eventSequence) > cursor),
   ].map(object).filter((event) => Number.isSafeInteger(event.eventSequence));
   events.sort((a, b) => Number(a.eventSequence) - Number(b.eventSequence));
+  // 同一 eventSequence 只保留**先出现的那一份**：它代表同一个应用事件（缓冲与实时流各送了一次），内容相同；
+  // 序号本身已决定新旧，不存在「同序号但更新」的帧。保留首份只是为了避免重复计算同一帧。
   const unique = events.filter((event, index) => index === 0 || event.eventSequence !== events[index - 1]?.eventSequence);
   const lastTurnStart = unique.findLastIndex((event) => event.type === 'turn_start');
   const currentTurn = lastTurnStart >= 0 ? unique.slice(lastTurnStart) : unique;

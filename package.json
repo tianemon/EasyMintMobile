@@ -38,6 +38,7 @@
     "ios": "node scripts/install-ios.mjs",
     "ipa": "node scripts/build-ipa.mjs",
     "web": "expo start --web",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test \"tests/**/*.test.mjs\"",
     "check": "tsc --noEmit && expo-doctor"
   },
   "private": true

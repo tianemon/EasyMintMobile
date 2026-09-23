@@ -4,7 +4,7 @@ name: CI
 # 限定 branches（不含 tag）：发版时 tag 与 main 指向同一个 commit，裸 on: push 会让同一次提交重复跑两遍。
 # paths-ignore：纯文档提交（README / CHANGELOG）没有可查的东西，跳过；提交里只要有一个非 .md 文件即照常触发。
 #
-# 这里 gate 的是 `tsc --noEmit`，没有直接 gate `npm run check`：后者还含 expo-doctor，
+# 这里 gate 的是 `tsc --noEmit` + 单测，没有直接 gate `npm run check`：后者还含 expo-doctor，
 # 而 expo-doctor 目前会报 2 处**既有**的 patch 版本偏差（expo、expo-build-properties），
 # 纳入门禁会让 CI 常红。等这两个依赖对齐 SDK 期望版本后，把下面那步换成 `npm run check` 即可。
 
@@ -33,3 +33,7 @@ jobs:
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+      # 会话消息合并/补帧这类纯逻辑有单测（tests/*.test.mjs，node:test + --experimental-strip-types 直接跑 .ts）
+      - name: Unit tests
+        run: npm test
