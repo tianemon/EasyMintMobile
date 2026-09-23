@@ -129,7 +129,8 @@ export interface BackgroundAgent {
   delegationId: string;
   index: number;
   title: string;
-  status?: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+  /** 'stopping' 是手机端自己的乐观态（点了停止、还没等到 PC 的 agent:delegation-count 回写）；PC 只下发其余五个值 */
+  status?: 'pending' | 'running' | 'stopping' | 'completed' | 'failed' | 'aborted';
   currentTool?: string;
   sessionId?: string;
 }

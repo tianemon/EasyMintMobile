@@ -367,6 +367,7 @@ function AppContent() {
     backgroundShells={backgroundShells} backgroundAgents={backgroundAgents}
     onOpenShellOutput={(shell) => setViewingShell({ id: shell.id, command: shell.command })}
     onStopShell={(shellId) => void actions.stopShell(shellId)}
+    onStopAgent={(delegationId, taskIndex) => void actions.stopAgent(delegationId, taskIndex)}
     running={running} mintStatus={mintStatus} composer={composer} onBack={goBack} />;
 
   // 状态栏图标明暗跟主题走：深色主题上用浅色图标（PC 亦然）

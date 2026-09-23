@@ -15,6 +15,8 @@ type BackgroundPillsProps = {
   onOpenShellOutput: (shell: BackgroundShell) => void;
   /** 停止单个后台命令（对应 PC ShellBar 行内的「停止」） */
   onStopShell: (shellId: string) => void;
+  /** 停止单个子 Agent（对应 PC AgentBar 行内的「停止」） */
+  onStopAgent: (delegationId: string, taskIndex: number) => void;
 };
 
 /**
@@ -22,9 +24,10 @@ type BackgroundPillsProps = {
  *
  * 与 PC 的 AgentBar / ShellBar 同构：
  *  - Shell 展开区是「运行中的 Shell(N)」+ 每行 [转圈 + 等宽命令 + 停止/停止中…]，点命令行看输出；
- *  - 输出正文不在这里预览——PC 的做法是点开看整块输出（手机端对应 ShellOutputSheet）。
+ *  - Agent 展开区是「运行中的 Agent(N)」+ 每行 [转圈 + 标题·当前工具 + 停止/停止中…]；
+ *  - 输出正文/子 Agent 过程不在这里预览——PC 的做法是点开看（手机端 Shell 对应 ShellOutputSheet，子 Agent 过程查看尚未接入）。
  */
-export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell }: BackgroundPillsProps) {
+export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell, onStopAgent }: BackgroundPillsProps) {
   const [expanded, setExpanded] = useState<'shell' | 'agent' | null>(null);
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -39,6 +42,12 @@ export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell
       {agents.map((agent) => <View key={`${agent.delegationId}-${agent.index}`} style={styles.backgroundRow}>
         <SpinIcon size={iconSize.pill} />
         <Text numberOfLines={2} style={styles.backgroundText}>{agent.title}{agent.currentTool ? ` · ${agent.currentTool}` : ''}</Text>
+        {agent.status === 'stopping'
+          // 已点停止：等 PC 广播回写（任务从中止清单里消失），按钮换成文案避免重复触发（Shell 行同款）
+          ? <Text style={styles.stoppingText}>停止中…</Text>
+          : <Pressable accessibilityLabel={`停止 ${agent.title}`} onPress={() => onStopAgent(agent.delegationId, agent.index)} style={styles.stopButton}>
+            <Text style={styles.stopText}>停止</Text>
+          </Pressable>}
       </View>)}
     </View>}
     {expanded === 'shell' && <View style={styles.backgroundPanel}>
@@ -50,9 +59,9 @@ export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell
         </Pressable>
         {shell.status === 'stopping'
           // 已点停止：杀进程中，按钮换成文案避免重复触发（PC 同款）
-          ? <Text style={styles.shellStopping}>停止中…</Text>
-          : <Pressable accessibilityLabel={`停止 ${shell.command}`} onPress={() => onStopShell(shell.id)} style={styles.shellStopButton}>
-            <Text style={styles.shellStopText}>停止</Text>
+          ? <Text style={styles.stoppingText}>停止中…</Text>
+          : <Pressable accessibilityLabel={`停止 ${shell.command}`} onPress={() => onStopShell(shell.id)} style={styles.stopButton}>
+            <Text style={styles.stopText}>停止</Text>
           </Pressable>}
       </View>)}
     </View>}
@@ -72,8 +81,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   backgroundRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   shellCommandButton: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   shellCommand: { color: colors.textPrimary, fontFamily: monoFont, fontSize: fontSize.caption },
-  shellStopButton: { flexShrink: 0, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.danger, backgroundColor: colors.dangerBg },
-  shellStopText: { color: colors.danger, fontSize: fontSize.ui11, fontWeight: '600' },
-  shellStopping: { flexShrink: 0, color: colors.textSecondary, fontSize: fontSize.ui11 },
+  // 停止按钮/停止中文案：Shell 行与 Agent 行共用（两行的停止语义与交互完全一致）
+  stopButton: { flexShrink: 0, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.danger, backgroundColor: colors.dangerBg },
+  stopText: { color: colors.danger, fontSize: fontSize.ui11, fontWeight: '600' },
+  stoppingText: { flexShrink: 0, color: colors.textSecondary, fontSize: fontSize.ui11 },
   backgroundText: { flexGrow: 1, flexShrink: 1, color: colors.textSecondary, fontSize: fontSize.caption, lineHeight: 17 },
 });

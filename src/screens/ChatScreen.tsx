@@ -32,6 +32,8 @@ type ChatScreenProps = {
   onOpenShellOutput: (shell: BackgroundShell) => void;
   /** 停止单个后台命令 */
   onStopShell: (shellId: string) => void;
+  /** 停止单个子 Agent */
+  onStopAgent: (delegationId: string, taskIndex: number) => void;
   onBack: () => void;
 };
 
@@ -44,7 +46,7 @@ export function ChatScreen(props: ChatScreenProps) {
     <ErrorBoundary label="消息区渲染出错"><MessageList messages={props.messages} /></ErrorBoundary>
     {!!props.pendingAsk && <AskCard ask={props.pendingAsk} onSubmit={props.onAnswerSubmit} />}
     <BackgroundPills shells={props.backgroundShells} agents={props.backgroundAgents}
-      onOpenShellOutput={props.onOpenShellOutput} onStopShell={props.onStopShell} />
+      onOpenShellOutput={props.onOpenShellOutput} onStopShell={props.onStopShell} onStopAgent={props.onStopAgent} />
     {props.running && !!props.mintStatus && <MintStatus text={props.mintStatus} />}
     <Composer {...props.composer} />
   </KeyboardAvoidingView>;

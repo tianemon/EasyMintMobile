@@ -65,6 +65,8 @@ export type SessionActions = {
   stop: () => Promise<void>;
   /** 停止单个后台命令 */
   stopShell: (shellId: string) => Promise<void>;
+  /** 停止单个子 Agent（PC AgentBar 行内「停止」同一条命令：delegation.stop → stopDelegationTask） */
+  stopAgent: (delegationId: string, taskIndex: number) => Promise<void>;
   /** 读后台命令日志尾部（查看完整输出） */
   readShellLog: (shellId: string) => Promise<ShellLog>;
   setRemoteSetting: (kind: 'permission' | 'thinking' | 'model', value: string, modelProvider?: string) => Promise<void>;
@@ -200,6 +202,26 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
   }, [client, fail, project, session, store]);
 
   /**
+   * 停止单个子 Agent（PC AgentBar 行内「停止」同一条命令：delegation.stop）。
+   * 载荷只递交 delegationId + taskIndex，能不能停由 PC 判定（归属校验见桌面端 remote-command-router 的 stopDelegation）；
+   * 运行中清单由 agent:delegation-count 回写（PC 侧 abortTask 后立即广播），所以不必本地删行。
+   */
+  const stopAgent = useCallback(async (delegationId: string, taskIndex: number) => {
+    if (!client || !project || !session) return;
+    try {
+      await client.command('delegation.stop', {
+        projectId: project.id, sessionId: session.sessionId, data: { delegationId, taskIndex },
+      });
+      // 乐观置 stopping：让按钮立刻变「停止中…」（PC 靠 registry 广播回写，链路上慢一拍）。
+      // 写在条目自己的 status 上而不是另存一份标记——syncBackground 是整表覆盖，回写到达即自然对账
+      // （停止失败/未生效时任务仍在表里，状态会被 PC 的真值改回来，不会卡在「停止中…」）。
+      store.patchRuntime(session.sessionId, (current) => ({
+        backgroundAgents: current.backgroundAgents.map((item) => item.delegationId === delegationId && item.index === taskIndex ? { ...item, status: 'stopping' as const } : item),
+      }));
+    } catch (e) { fail(e); }
+  }, [client, fail, project, session, store]);
+
+  /**
    * 读后台命令日志尾部（「查看完整输出」的首屏数据）。
    * 与 PC 同口径：只传 shellId，本机日志路径由 PC 侧自己解析、不回传（见桌面端 remote-command-router）。
    */
@@ -268,5 +290,5 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     }]);
   }, [client, fail, menuSession, project, refreshSessions, session, store]);
 
-  return { openSession, startNewSession, send, stop, stopShell, readShellLog, setRemoteSetting, answerAsk, renameSession, setPinned, archiveCurrent };
+  return { openSession, startNewSession, send, stop, stopShell, stopAgent, readShellLog, setRemoteSetting, answerAsk, renameSession, setPinned, archiveCurrent };
 }
