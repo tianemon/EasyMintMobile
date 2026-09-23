@@ -7,6 +7,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 本仓库是 EasyMint 手机端（局域网终端 App），2026-09-18 从 EasyMint 桌面端主仓库迁出为独立仓库。桌面端在 `~/dev/project/EasyMint`，两端通过加密 WebSocket 通信，改动远程协议时需两边同步。
 
 - **检查**：`npm run check`（`tsc --noEmit` + `expo-doctor`）
+- **测试**：`npm test`（= `node --experimental-strip-types --test "tests/**/*.test.mjs"`，直接跑 `.ts` 源码、无需编译）。用例放 `tests/`，**文件名必须以 `.test.mjs` 结尾**——`node --test` 只按这个命名发现文件；换个名字（如 `buffered-events.mjs`）会**静默跑不到**，且 `node --test tests/` 会把目录当模块路径解析、直接报 `MODULE_NOT_FOUND`，不会去扫目录。CI 的 quality-gate 里有一道 `Unit tests`
 - **打包**：`npm run apk` → 输出 `apk/EasyMint-{yyyyMMddHHmmss}.apk`（脚本 `scripts/build-apk.mjs`）。构建成功后**自动清理旧包，默认只保留最新一个**（新包落盘后才清，构建失败不动已有产物）；要留上一版做对比时传参覆盖：`node scripts/prune-apks.mjs 3`
 - **只构建 arm64-v8a**（默认）：手机都是 arm64；x86/x86_64 只给模拟器、armeabi-v7a 是 32 位老设备——一起编会让原生编译量翻四倍、包体多出 66MB。需要全架构包时 `APK_ARCH=armeabi-v7a,arm64-v8a,x86,x86_64 npm run apk`
 - **`app.json`/`package.json` 未变时跳过 `expo prebuild`**（脚本自动判断，存在 `android/.prebuild-inputs` 哈希标记）：prebuild 会重建整个 android/ 使 Gradle 增量失效，是重复构建慢的主因；改配置或依赖后会自动重建
