@@ -40,7 +40,7 @@ export function ChatScreen(props: ChatScreenProps) {
   const commonStyles = useThemedStyles(makeCommonStyles);
   return <KeyboardAvoidingView style={commonStyles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
     <Header title={props.title} onBack={props.onBack} right={<ConnectionIndicator status={props.connection} />} />
-    {/* 定位期临时：消息区渲染异常直接画在屏幕上，不留空白（排查完可移除边界） */}
+    {/* 消息区渲染异常时保留错误提示，避免整页空白 */}
     <ErrorBoundary label="消息区渲染出错"><MessageList messages={props.messages} /></ErrorBoundary>
     {!!props.pendingAsk && <AskCard ask={props.pendingAsk} onSubmit={props.onAnswerSubmit} />}
     <BackgroundPills shells={props.backgroundShells} agents={props.backgroundAgents}

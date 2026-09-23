@@ -7,7 +7,7 @@ import type {
 } from '../protocol/types';
 import type { AskAnswer, ComposerControl, Page, ShellLog } from '../types';
 import type { DraftAttachment } from './attachments';
-import { prependMessage } from './messages';
+import { object, prependMessage } from './messages';
 import { DRAFT_SESSION_ID, EMPTY_RUNTIME } from './runtime';
 import type { PatchRuntime } from './runtime';
 
@@ -53,7 +53,7 @@ export type SessionActionsOptions = {
   pendingAsk: PendingAsk | null;
   fail: (error: unknown) => void;
   /** 快照落地到**该会话自己的格**（调用方给出会话 id，不做「当前会话」推断） */
-  applySnapshot: (sessionId: string, snapshot: SessionSnapshot) => void;
+  applySnapshot: (sessionId: string, snapshot: SessionSnapshot, duringRequest: unknown[]) => void;
   refreshSessions: (project: OpenProject) => Promise<void>;
   store: SessionActionsStore;
 };
@@ -89,6 +89,13 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     if (!client || !selectedProject) return;
     const sessionId = selected.sessionId;
     const seq = ++openSeq.current;
+    // 请求在途时先收集实时事件；快照带应用事件游标，落地时只补游标之后的帧。
+    const duringRequest: unknown[] = [];
+    const off = client.onEvent((event, envelope) => {
+      if (event.channel === 'agent:stream' && envelope.sessionId === sessionId) {
+        duringRequest.push({ ...object(event.data), eventSequence: event.eventSequence });
+      }
+    });
     try {
       store.setBusy(true);
       store.setComposerControl(null);
@@ -107,9 +114,9 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
       // 期间又切了别的会话：这次快照作废（否则旧快照会把当前会话的内容盖成上一个会话的）
       if (seq !== openSeq.current) return;
       store.setProject(selectedProject); store.setSession(selected); store.setChatOrigin(origin);
-      applySnapshot(sessionId, snapshot);
+      applySnapshot(sessionId, snapshot, duringRequest);
       store.setModels(capabilities); store.setPage('chat');
-    } catch (e) { if (seq === openSeq.current) fail(e); } finally { if (seq === openSeq.current) store.setBusy(false); }
+    } catch (e) { if (seq === openSeq.current) fail(e); } finally { off(); if (seq === openSeq.current) store.setBusy(false); }
   }, [applySnapshot, client, fail, page, project, store]);
 
   const startNewSession = useCallback(async () => {

@@ -10,7 +10,7 @@ type State = { error: Error | null };
 
 /**
  * 渲染错误兜底：出错时把错误画在屏幕上，而不是留一片空白让人猜。
- * 定位期临时组件——消息区异常排查完可移除（或保留作长期兜底，由使用方决定）。
+ * 聊天消息区长期兜底：保留原始错误信息，便于定位渲染异常。
  */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };

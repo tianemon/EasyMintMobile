@@ -141,3 +141,31 @@ export function snapshotMessages(snapshot: SessionSnapshot): DisplayMessage[] {
   });
   return messages.reverse();
 }
+
+/** 快照生成期间漏过的实时帧按应用事件序号补齐；同一累计帧只取最新内容。 */
+export function snapshotMessagesWithBuffer(snapshot: SessionSnapshot, duringRequest: unknown[]): { messages: DisplayMessage[]; running: boolean } {
+  const messages = snapshotMessages(snapshot);
+  const cursor = snapshot.eventSequence ?? -1;
+  const events = [
+    ...(snapshot.status !== 'idle' && snapshot.status !== 'stopped' ? snapshot.bufferedEvents : []),
+    ...duringRequest.filter((value) => Number(object(value).eventSequence) > cursor),
+  ].map(object).filter((event) => Number.isSafeInteger(event.eventSequence));
+  events.sort((a, b) => Number(a.eventSequence) - Number(b.eventSequence));
+  const unique = events.filter((event, index) => index === 0 || event.eventSequence !== events[index - 1]?.eventSequence);
+  const lastTurnStart = unique.findLastIndex((event) => event.type === 'turn_start');
+  const currentTurn = lastTurnStart >= 0 ? unique.slice(lastTurnStart) : unique;
+  const lastFrame = [...currentTurn].reverse().find((event) => (event.type === 'message' || event.type === 'message_start') && Array.isArray(event.blocks));
+  const terminalIndex = currentTurn.findLastIndex((event) => event.type === 'turn_end' || event.type === 'error');
+  const frameIndex = currentTurn.findLastIndex((event) => event === lastFrame);
+  const ended = terminalIndex >= 0 && terminalIndex > frameIndex;
+  const running = !ended && (snapshot.status !== 'idle' && snapshot.status !== 'stopped' || currentTurn.some((event) => event.type === 'turn_start'));
+  if (lastFrame) {
+    const blocks = contentBlocks(lastFrame.blocks);
+    const alreadyInHistory = messages.some((message) => message.role === 'assistant' && JSON.stringify(message.blocks) === JSON.stringify(blocks));
+    if (blocks.length && !alreadyInHistory) {
+      messages.unshift({ id: `stream-recovered-${String(lastFrame.chatId ?? 'run')}-${String(lastFrame.eventSequence)}`,
+        role: 'assistant', blocks, streaming: running && lastFrame.partial !== false });
+    }
+  }
+  return { messages, running };
+}

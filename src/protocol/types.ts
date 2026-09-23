@@ -109,6 +109,7 @@ export interface SessionSnapshot {
   thinking?: { level?: string; available?: string[] };
   pendingAsks: PendingAsk[];
   bufferedEvents: unknown[];
+  eventSequence?: number;
   background?: {
     shells: BackgroundShell[];
     agents: BackgroundAgent[];

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 import type { RemoteClient } from '../connection/remote-client';
 import type {
   BackgroundAgent, BackgroundShell, OpenProject, PendingAsk, RemoteEvent, SessionListItem,
@@ -36,6 +37,7 @@ export type RemoteEventsOptions = {
   project: OpenProject | null;
   /** 当前显示的会话：重活（正文帧/工具帧）只给它做 */
   session: SessionListItem | null;
+  streamMessageIds: RefObject<Record<string, string | null>>;
   refreshHome: () => void;
   refreshProjects: () => void;
   refreshSessions: (project: OpenProject) => void;
@@ -48,9 +50,7 @@ export type RemoteEventsOptions = {
  * 中间帧先按下一帧边界合并，见 stream-frames.ts。
  */
 export function useRemoteEvents(options: RemoteEventsOptions): void {
-  const { client, deviceId, page, project, session, refreshHome, refreshProjects, refreshSessions, store } = options;
-  /** 每个会话各自的流式消息 id（换会话不再需要作废——各格独立） */
-  const streamMessageIds = useRef<Record<string, string | null>>({});
+  const { client, deviceId, page, project, session, streamMessageIds, refreshHome, refreshProjects, refreshSessions, store } = options;
 
   /**
    * 当前显示什么（会话 / 页面 / 项目）。

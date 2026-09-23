@@ -21,7 +21,7 @@ import { SessionMenuModal } from './src/screens/SessionMenuModal';
 import { SessionsScreen } from './src/screens/SessionsScreen';
 import { ShellOutputSheet } from './src/screens/ShellOutputSheet';
 import { clearCredential, loadCredential, saveCredential } from './src/security/credential-store';
-import { snapshotMessages } from './src/session/messages';
+import { snapshotMessagesWithBuffer } from './src/session/messages';
 import type { DisplayMessage } from './src/session/messages';
 import { DRAFT_SESSION_ID, EMPTY_RUNTIME } from './src/session/runtime';
 import type { PatchRuntime, SessionRuntime } from './src/session/runtime';
@@ -198,13 +198,16 @@ function AppContent() {
     if (connection === 'connected') void refreshHomeSessions();
   }, [connection, refreshHomeSessions]);
 
-  const applySnapshot = useCallback((sessionId: string, snapshot: SessionSnapshot) => {
-    const isRunning = snapshot.status !== 'idle' && snapshot.status !== 'stopped';
+  const streamMessageIds = useRef<Record<string, string | null>>({});
+  const applySnapshot = useCallback((sessionId: string, snapshot: SessionSnapshot, duringRequest: unknown[]) => {
+    const recovered = snapshotMessagesWithBuffer(snapshot, duringRequest);
+    streamMessageIds.current[sessionId] = recovered.messages.find((item) => item.streaming)?.id ?? null;
+    const isRunning = recovered.running;
     const available = snapshot.thinking?.available;
     updateMintStatus(sessionId, isRunning ? '正在处理…' : '');
     patchRuntime(sessionId, {
       // snapshotMessages 已按列表顺序返回（最新在前）
-      messages: snapshotMessages(snapshot),
+      messages: recovered.messages,
       running: isRunning,
       permission: snapshot.cache?.permissionMode ?? 'standard',
       // 会话真实生效等级优先于缓存：PC 同一会话也是以 session.thinkingLevel 为准（缓存只是上次的期望值，
@@ -244,7 +247,7 @@ function AppContent() {
   const submitAsk = useCallback((answers: AskAnswer[] | null) => { void actions.answerAsk(answers); }, [actions.answerAsk]);
 
   useRemoteEvents({
-    client, deviceId: credential?.deviceId, page, project, session, refreshHome: refreshHomeSessions,
+    client, deviceId: credential?.deviceId, page, project, session, streamMessageIds, refreshHome: refreshHomeSessions,
     refreshProjects, refreshSessions, store: remoteStore,
   });
 
