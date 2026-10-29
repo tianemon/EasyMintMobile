@@ -47,7 +47,6 @@ export type SessionActionsOptions = {
   permission: PermissionMode;
   thinking: string;
   model: string;
-  provider: string | undefined;
   menuSession: SessionListItem | null;
   renameTitle: string;
   pendingAsk: PendingAsk | null;
@@ -69,7 +68,7 @@ export type SessionActions = {
   stopAgent: (delegationId: string, taskIndex: number) => Promise<void>;
   /** 读后台命令日志尾部（查看完整输出） */
   readShellLog: (shellId: string) => Promise<ShellLog>;
-  setRemoteSetting: (kind: 'permission' | 'thinking' | 'model', value: string, modelProvider?: string) => Promise<void>;
+  setRemoteSetting: (kind: 'permission' | 'thinking' | 'model', value: string) => Promise<void>;
   /** 回答提问：答案由提问卡自己收集（PC 同款），这里只负责递交；null/空列表 = 取消提问 */
   answerAsk: (answers: AskAnswer[] | null) => Promise<void>;
   renameSession: () => Promise<void>;
@@ -80,7 +79,7 @@ export type SessionActions = {
 /** 会话级命令（打开/新建/发送/中止/设置/问答/重命名/置顶/归档），全部走 RemoteClient.command */
 export function useSessionActions(options: SessionActionsOptions): SessionActions {
   const {
-    client, project, session, page, running, draft, attachments, permission, thinking, model, provider,
+    client, project, session, page, running, draft, attachments, permission, thinking, model,
     menuSession, renameTitle, pendingAsk, fail, applySnapshot, refreshSessions, store,
   } = options;
 
@@ -164,7 +163,7 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
         const result = await client.command<{ sessionId: string }>('session.send', {
           projectId: project.id, sessionId: session?.sessionId,
           data: { text, attachments: remoteAttachments, permissionMode: permission, thinkingLevel: thinking,
-            ...(model ? { model } : {}), ...(provider ? { provider } : {}) },
+            ...(model ? { model } : {}) },
         });
         if (!session) {
           const created = { sessionId: result.sessionId, title: text.slice(0, 30) || outgoingAttachments[0]?.name || '附件', createdAt: Date.now(), updatedAt: Date.now() };
@@ -175,7 +174,7 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
         store.patchRuntime(result.sessionId, { running: true });
       }
     } catch (e) { store.setMintStatus(sessionId, ''); fail(e); }
-  }, [attachments, client, draft, fail, model, permission, project, provider, running, session, store, thinking]);
+  }, [attachments, client, draft, fail, model, permission, project, running, session, store, thinking]);
 
   const stop = useCallback(async () => {
     if (!client || !project || !session) return;
@@ -232,15 +231,16 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     });
   }, [client, project, session]);
 
-  const setRemoteSetting = useCallback(async (kind: 'permission' | 'thinking' | 'model', value: string, modelProvider?: string) => {
+  /** 会话级设置。供应商恒为桌面端全局当前供应商，故只传模型/等级/权限，不再带 provider */
+  const setRemoteSetting = useCallback(async (kind: 'permission' | 'thinking' | 'model', value: string) => {
     const sessionId = session?.sessionId ?? DRAFT_SESSION_ID;
     if (kind === 'permission') store.patchRuntime(sessionId, { permission: value as PermissionMode });
     if (kind === 'thinking') store.patchRuntime(sessionId, { thinking: value });
-    if (kind === 'model') store.patchRuntime(sessionId, { model: value, provider: modelProvider });
+    if (kind === 'model') store.patchRuntime(sessionId, { model: value });
     if (!client || !project || !session) return;
     try {
       const command = kind === 'permission' ? 'session.setPermission' : kind === 'thinking' ? 'session.setThinking' : 'session.setModel';
-      const data = kind === 'permission' ? { mode: value } : kind === 'thinking' ? { level: value } : { model: value, provider: modelProvider };
+      const data = kind === 'permission' ? { mode: value } : kind === 'thinking' ? { level: value } : { model: value };
       await client.command(command, { projectId: project.id, sessionId: session.sessionId, data });
     } catch (e) { fail(e); }
   }, [client, fail, project, session, store]);

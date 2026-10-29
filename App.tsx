@@ -125,7 +125,7 @@ function AppContent() {
   const active = runtime[activeSessionId] ?? EMPTY_RUNTIME;
   const {
     messages, running, mintStatus, pendingAsk, backgroundShells, backgroundAgents,
-    contextUsage, permission, thinking, thinkingOptions, model, provider,
+    contextUsage, permission, thinking, thinkingOptions, model,
   } = active;
 
   // 状态文案去重（**每个会话各自**记录上一次的值）：流式期间每帧都会写同一个值，逐帧 setState 会白跑一次整树渲染。
@@ -215,7 +215,6 @@ function AppContent() {
       thinking: snapshot.thinking?.level ?? snapshot.cache?.thinkingLevel ?? 'medium',
       thinkingOptions: available?.length ? THINKING_ORDER.filter((level) => available.includes(level)) : [...THINKING_ORDER],
       model: snapshot.cache?.model ?? '',
-      provider: snapshot.cache?.provider,
       pendingAsk: snapshot.pendingAsks[0] ?? null,
       backgroundShells: snapshot.background?.shells ?? [],
       backgroundAgents: snapshot.background?.agents ?? [],
@@ -239,7 +238,7 @@ function AppContent() {
   }), [emitShellChunk, patchRuntime, syncBackground, updateMintStatus]);
 
   const actions = useSessionActions({
-    client, project, session, page, running, draft, attachments, permission, thinking, model, provider,
+    client, project, session, page, running, draft, attachments, permission, thinking, model,
     menuSession, renameTitle, pendingAsk, fail, applySnapshot, refreshSessions, store: sessionStore,
   });
 
@@ -321,7 +320,7 @@ function AppContent() {
     onControlChange: setComposerControl,
     onSend: () => void actions.send(),
     onStop: () => void actions.stop(),
-    onSelectModel: (modelId: string, providerId: string | undefined) => void actions.setRemoteSetting('model', modelId, providerId),
+    onSelectModel: (modelId: string) => void actions.setRemoteSetting('model', modelId),
     onSelectPermission: (mode: PermissionMode) => void actions.setRemoteSetting('permission', mode),
     onSelectThinking: (level: string) => void actions.setRemoteSetting('thinking', level),
     // 上限判定收进 appendAttachments（与桌面端同源），这里只负责落 state 与提示。

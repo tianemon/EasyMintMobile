@@ -33,7 +33,7 @@ export type ComposerProps = {
   onControlChange: (control: ComposerControl) => void;
   onSend: () => void;
   onStop: () => void;
-  onSelectModel: (modelId: string, providerId: string | undefined) => void;
+  onSelectModel: (modelId: string) => void;
   onSelectPermission: (mode: PermissionMode) => void;
   onSelectThinking: (level: string) => void;
   onPickAttachments: (kind: AttachmentKind) => void;
@@ -144,7 +144,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     </View>}
     {control === 'model' && <View style={styles.composerMenu}>
       <Text style={styles.composerMenuTitle}>{provider?.name ?? '当前供应商'}</Text>
-      {(provider?.models ?? []).map((item) => <Pressable key={item.id} style={styles.composerOption} onPress={() => { props.onSelectModel(item.id, provider?.id); props.onControlChange(null); }}>
+      {(provider?.models ?? []).map((item) => <Pressable key={item.id} style={styles.composerOption} onPress={() => { props.onSelectModel(item.id); props.onControlChange(null); }}>
         <Text style={styles.composerOptionText}>{item.name}</Text>{model === item.id && <Icon name="check" size={iconSize.nav} color={colors.accent} />}
       </Pressable>)}
     </View>}

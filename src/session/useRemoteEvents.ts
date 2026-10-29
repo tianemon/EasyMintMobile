@@ -181,9 +181,9 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         return;
       }
       if (event.channel === 'agent:remote-settings-changed') {
+        // 供应商恒为桌面端的全局当前供应商（2026-10-29 起协议不再下发 provider），这里只跟随模型
         store.patchRuntime(sessionId, {
           ...(typeof data.model === 'string' ? { model: data.model } : {}),
-          ...(typeof data.provider === 'string' ? { provider: data.provider } : {}),
           ...(typeof data.thinkingLevel === 'string' ? { thinking: data.thinkingLevel } : {}),
           ...(data.permissionMode === 'readonly' || data.permissionMode === 'standard' || data.permissionMode === 'full' ? { permission: data.permissionMode } : {}),
         });

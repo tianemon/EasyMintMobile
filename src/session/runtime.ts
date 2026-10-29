@@ -28,7 +28,6 @@ export type SessionRuntime = {
   thinking: string;
   thinkingOptions: string[];
   model: string;
-  provider: string | undefined;
 };
 
 /** 没有任何事件/快照到达前的默认值（也用于新会话草稿格的初次写入） */
@@ -44,7 +43,6 @@ export const EMPTY_RUNTIME: SessionRuntime = {
   thinking: 'medium',
   thinkingOptions: [],
   model: '',
-  provider: undefined,
 };
 
 /** 会话级状态的写入器签名（按会话 id 落格） */

@@ -101,7 +101,6 @@ export interface SessionSnapshot {
   }>;
   cache?: {
     model?: string;
-    provider?: string;
     thinkingLevel?: string;
     permissionMode?: PermissionMode;
   };
