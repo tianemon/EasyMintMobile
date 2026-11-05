@@ -199,7 +199,7 @@ function AppContent() {
   }, [connection, refreshHomeSessions]);
 
   const streamMessageIds = useRef<Record<string, string | null>>({});
-  /** 会话回合是否仍在跑：状态栏清空时据此回落到「正在处理…」（桌面端信号栈的简化版）。
+  /** 会话回合是否仍在跑：状态栏清空时据此回落到「正在处理...」（桌面端信号栈的简化版）。
    *  快照路径在 applySnapshot 里同步，流式回合边界由 useRemoteEvents 维护。 */
   const activeTurn = useRef<Record<string, boolean>>({});
   const applySnapshot = useCallback((sessionId: string, snapshot: SessionSnapshot, duringRequest: unknown[]) => {
@@ -208,7 +208,7 @@ function AppContent() {
     const isRunning = recovered.running;
     activeTurn.current[sessionId] = isRunning;
     const available = snapshot.thinking?.available;
-    updateMintStatus(sessionId, isRunning ? '正在处理…' : '');
+    updateMintStatus(sessionId, isRunning ? '正在处理...' : '');
     patchRuntime(sessionId, {
       // snapshotMessages 已按列表顺序返回（最新在前）
       messages: recovered.messages,

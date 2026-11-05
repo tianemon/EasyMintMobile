@@ -1,14 +1,18 @@
 // Run: npm test
 // 桌面端 2026-11 跟进：状态类帧的文案映射 + 工具名清单镜像
+//
+// 这些**字面量**是桌面端 `app/shared/i18n/locales/zh-CN.json` 里的原文（ui.ChatPanel.* / pi.*），
+// 断言里刻意写字面量而不是引用常量：状态栏文案一旦与桌面端跑偏，这里要能红。
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { droppedSteerText, resolveStatusHint, streamStatusHint, streamSystemNotice } from '../src/session/status-hints.ts';
+import { droppedSteerText, resolveStatusHint, streamStatusHint, streamSystemNotice, streamingHint } from '../src/session/status-hints.ts';
 import { resolveSettingsRevision, SETTINGS_REPLAY_WINDOW_MS } from '../src/session/settings-revision.ts';
 import { toolDisplay, toolLabel, toolStatus } from '../src/session/tools.ts';
 import { resultError } from '../src/connection/remote-result.ts';
 
 test('压缩类帧映射到状态栏文案，结束帧清空', () => {
-  assert.equal(streamStatusHint('compacting', {}), '正在整理上下文…');
+  // ui.ChatPanel.contextNeedsCompactionCompacting（手机端没有手动压缩入口，统一用自动那条）
+  assert.equal(streamStatusHint('compacting', {}), '检测到上下文需整理，正在整理…');
   // 'compact' 是 agent:context-summarizing 通道的 type 值，不是 agent:stream 帧类型，
   // 不能当成状态帧吞掉（返回 null 才会交给后续业务分支）
   assert.equal(streamStatusHint('compact', {}), null);
@@ -18,8 +22,17 @@ test('压缩类帧映射到状态栏文案，结束帧清空', () => {
   assert.equal(streamStatusHint('compaction_finished', {}), '');
 });
 
+test('流式块类型 → 状态栏文案（正文期间不得为空）', () => {
+  assert.equal(streamingHint('text'), '正在回复');          // pi.responding
+  assert.equal(streamingHint('thinking'), '正在思考...');   // ui.ChatPanel.thinking
+  assert.equal(streamingHint('tool'), '正在处理...');       // ui.ChatPanel.processing
+  // 未知块类型也不能给空串：空串会让状态栏整条消失
+  assert.equal(streamingHint(undefined), '正在处理...');
+});
+
 test('waiting_user 按 waiting 布尔值给/清状态', () => {
-  assert.equal(streamStatusHint('waiting_user', { waiting: true }), '等待你的回复…');
+  // pi.waitingUser 原文不带省略号
+  assert.equal(streamStatusHint('waiting_user', { waiting: true }), '等待你的回复');
   assert.equal(streamStatusHint('waiting_user', { waiting: false }), '');
 });
 
@@ -33,7 +46,7 @@ test('retry_state 的 start 带次数与退避秒数，end 按成功与否回态
     streamStatusHint('retry_state', { retryPhase: 'start', retryAttempt: 1, retryMaxAttempts: 3, retryDelayMs: 0 }),
     '正在重试 1/3',
   );
-  assert.equal(streamStatusHint('retry_state', { retryPhase: 'end', retrySuccess: true }), '正在处理…');
+  assert.equal(streamStatusHint('retry_state', { retryPhase: 'end', retrySuccess: true }), '正在处理...');
   assert.equal(streamStatusHint('retry_state', { retryPhase: 'end', retrySuccess: false }), '');
 });
 
@@ -115,8 +128,8 @@ test('业务帧与空文本不产生系统通知（不插空气泡）', () => {
   assert.equal(streamSystemNotice('compacted', { summary: '只有 summary 没有 text' }), null);
 });
 
-test('清空状态栏时若回合仍在跑，回落到「正在处理…」', () => {
-  assert.equal(resolveStatusHint(true, ''), '正在处理…');
+test('清空状态栏时若回合仍在跑，回落到「正在处理...」', () => {
+  assert.equal(resolveStatusHint(true, ''), '正在处理...');
   assert.equal(resolveStatusHint(false, ''), '');
   assert.equal(resolveStatusHint(true, '正在重试 1/3'), '正在重试 1/3');
 });

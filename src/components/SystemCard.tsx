@@ -49,7 +49,10 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
   const isSummary = kind === 'summary';
   const collapsible = !ALWAYS_EXPANDED_KINDS.has(kind);
   const showBody = (!collapsible || expanded) && !!body;
-  const toneColors = { failed: colors.danger, interrupt: colors.interrupt, done: colors.done };
+  // 与桌面端 ChatPanel.tsx:3373-3376 的三档同源：失败 = --color-fail（#ff5f57），
+  // 中止系/等待操作 = --color-interrupt，完成 = --color-done。**失败不是 danger**：
+  // danger 是运行错误卡的底色语义，两者在桌面端是两个 token。
+  const toneColors = { failed: colors.fail, interrupt: colors.interrupt, done: colors.done };
   const statusColor = (value: string | undefined): string => toneColors[statusTone(value)];
   // 运行错误：桌面端是红字 alert（ChatPanel 的 error 条目）。手机端整卡一并转红——错误卡混在
   // 系统消息里若不标色，用户很容易当成又一条普通通知划过去。

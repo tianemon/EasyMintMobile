@@ -21,7 +21,7 @@ export type SessionActionsStore = {
   migrateRuntime: (from: string, to: string) => void;
   /** 状态文案（按会话去重） */
   setMintStatus: (sessionId: string, value: string) => void;
-  /** 回合标记：与 useRemoteEvents / applySnapshot 共享，清空状态栏时据此回落到「正在处理…」 */
+  /** 回合标记：与 useRemoteEvents / applySnapshot 共享，清空状态栏时据此回落到「正在处理...」 */
   activeTurn: RefObject<Record<string, boolean>>;
   setPage: (page: Page) => void;
   setProject: (project: OpenProject | null) => void;
@@ -154,9 +154,13 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     const sessionId = session?.sessionId ?? DRAFT_SESSION_ID;
     store.setDraft('');
     store.setAttachments([]);
-    store.setMintStatus(sessionId, '等待模型响应…');
+    store.setMintStatus(sessionId, '等待模型响应...');
     store.activeTurn.current[sessionId] = true;
     store.patchRuntime(sessionId, (current) => ({
+      // running 与桌面端一样**乐观置位**（ChatPanel.tsx:2383 发送即 setBusy(true)）：
+      // 状态栏与发送区的「停止」都要按 running 显示，等 session.send 回来才置位，
+      // 这段网络往返里「等待模型响应...」和停止按钮都是不可见的。失败时在 catch 里回滚。
+      running: true,
       // sentAt：本地回显拿不到 PC 时间戳（桌面端不会再把它广播回来），但回合「用时」要算上
       // 等待模型响应的那一段，所以用本机时钟做走秒锚点。它不参与 insertMessageByTime 的跨机排序。
       messages: prependMessage(current.messages, {
@@ -183,14 +187,20 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
         store.activeTurn.current[result.sessionId] = true;
       }
     } catch (e) {
+      // 乐观置位要回滚，否则发送失败后界面停在「运行中」：状态栏一直转、停止按钮按不动
       store.activeTurn.current[sessionId] = false;
-      store.setMintStatus(sessionId, ''); fail(e);
+      store.setMintStatus(sessionId, '');
+      store.patchRuntime(sessionId, { running: false });
+      fail(e);
     }
   }, [attachments, client, draft, fail, model, permission, project, running, session, store, thinking]);
 
   const stop = useCallback(async () => {
     if (!client || !project || !session) return;
     try {
+      // 与桌面端同款：点停止先给「正在停止」（ChatPanel.tsx:2884 的 stopping 信号），
+      // 否则等待 PC 确认的这几秒里状态栏还写着「正在回复」，用户会以为没点上而重复点。
+      store.setMintStatus(session.sessionId, '正在停止');
       await client.command('session.abort', { projectId: project.id, sessionId: session.sessionId });
       store.setMintStatus(session.sessionId, '');
       store.activeTurn.current[session.sessionId] = false;
@@ -199,8 +209,9 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
       // 桌面端在 SDK 停止超时会抛 ABORT_TIMEOUT（remote-command-router.ts 的 session.abort）。
       // 那不是「操作失败」而是「尚未确认停止」：会话可能仍在跑，保持 running、状态栏给可重试提示，
       // 不弹错误框。await 抛错时上面的 running:false 本就不会执行，这里不要再补一次。
+      // 文案直接沿用桌面端那句（ChatPanel.tsx:2242），两边说的是同一件事、同样的建议。
       if ((e as { code?: string }).code === 'ABORT_TIMEOUT') {
-        store.setMintStatus(session.sessionId, '停止未确认，请稍后重试');
+        store.setMintStatus(session.sessionId, '停止尚未完成，当前会话仍在处理，请稍后重试');
       } else fail(e);
     }
   }, [client, fail, project, session, store]);

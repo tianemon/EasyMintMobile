@@ -10,7 +10,7 @@ import type { DisplayAttachment, DisplayUsage } from './messages';
 import type { PatchRuntime } from './runtime';
 import { createStreamFrameQueue, scheduleOnNextFrame } from './stream-frames';
 import { resolveSettingsRevision } from './settings-revision';
-import { droppedSteerText, resolveStatusHint, streamStatusHint, streamSystemNotice } from './status-hints';
+import { COMPACTING_HINT, droppedSteerText, resolveStatusHint, streamStatusHint, streamSystemNotice, streamingHint } from './status-hints';
 import { THINKING_ORDER } from './thinking';
 import { toolStatusTargeted } from './tools';
 
@@ -84,7 +84,15 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       if (!blocks.length) return;
       const id = streamMessageIds.current[sessionId] ?? `stream-${String(data.runId ?? 'run')}-${Date.now()}`;
       streamMessageIds.current[sessionId] = id;
-      store.setMintStatus(sessionId, streaming && blocks[blocks.length - 1]?.kind === 'thinking' ? '正在思考…' : '');
+      // 状态栏跟着**正在产出什么**走，与桌面端 ChatPanel.tsx:1624-1632 同口径：
+      // 正文流式 →「正在回复」；思考流式 →「正在思考...」；工具块 →「正在处理...」。
+      // 关键是**正文流式时不能把状态栏清空**（正文一出现就整行消失，用户就只剩计时器可看）。
+      // 终帧（partial === false）不改状态：状态的生命周期交给 turn_end / agent:exit，
+      // 与桌面端「信号栈到回合结束才 pop」一致，也避免终帧与 turn_end 之间闪一下空白。
+      if (streaming) {
+        const tail = blocks[blocks.length - 1]?.kind;
+        store.setMintStatus(sessionId, streamingHint(tail === 'thinking' || tail === 'text' ? tail : 'tool'));
+      }
       // 终帧（partial === false）带 usage / durationMs / stopReason（桌面端 event-bridge.ts:352-353）：
       // 缺了它们，实时会话里既没有「用时」也判不出回合边界，只有重开会话走快照才补齐。
       const rawUsage = object(data.usage);
@@ -227,8 +235,11 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         return;
       }
       if (event.channel === 'agent:context-summarizing') {
-        // type: 'compact' = 开始压缩，'done' = 结束；只走状态栏，不进消息流（PC 同口径）
-        store.setMintStatus(sessionId, data.type === 'done' ? '' : '正在整理上下文…');
+        // type: 'compact' = 开始压缩，'done' = 结束；只走状态栏，不进消息流（PC 同口径）。
+        // 结束时要按运行态回落：回合还在跑就回「正在处理...」，否则清空——
+        // 直接置空会把状态栏抹掉，用户会以为已经停了（桌面端是 pop 信号后回落到次新信号）。
+        store.setMintStatus(sessionId, data.type === 'done'
+          ? resolveStatusHint(activeTurn.current[sessionId] ?? false, '') : COMPACTING_HINT);
         return;
       }
       // chat-session / chat-closed 是桌面端 Pi 内部 chat 的生命周期（chatId / tabId），
@@ -295,7 +306,7 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         activeTurn.current[sessionId] = true;
         streamMessageIds.current[sessionId] = null;
         store.patchRuntime(sessionId, { running: true });
-        store.setMintStatus(sessionId, '等待模型响应…');
+        store.setMintStatus(sessionId, '等待模型响应...');
       } else if (type === 'turn_end' || type === 'error') {
         activeTurn.current[sessionId] = false;
         streamMessageIds.current[sessionId] = null;
@@ -364,11 +375,11 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
           }) };
         });
       } else if (type === 'tool_done') {
-        store.setMintStatus(sessionId, '正在处理…');
+        store.setMintStatus(sessionId, '正在处理...');
         const toolId = String(data.toolCallId ?? data.toolName ?? 'running');
         store.patchRuntime(sessionId, (current) => ({ messages: markToolDone(current.messages, toolId) }));
       } else if (type === 'tool_result') {
-        store.setMintStatus(sessionId, '正在处理…');
+        store.setMintStatus(sessionId, '正在处理...');
         const name = String(data.toolName ?? '工具调用');
         const toolId = String(data.toolCallId ?? name);
         const rawOutput = contentText(data.content);

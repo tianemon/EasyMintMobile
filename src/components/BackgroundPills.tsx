@@ -24,7 +24,7 @@ type BackgroundPillsProps = {
  *
  * 与 PC 的 AgentBar / ShellBar 同构：
  *  - Shell 展开区是「运行中的 Shell(N)」+ 每行 [转圈 + 等宽命令 + 停止/停止中…]，点命令行看输出；
- *  - Agent 展开区是「运行中的 Agent(N)」+ 每行 [转圈 + 标题·当前工具 + 停止/停止中…]；
+ *  - Agent 展开区是「执行中的 Agent(N)」+ 每行 [转圈 + 标题·当前工具 + 停止/停止中…]；
  *  - 输出正文/子 Agent 过程不在这里预览——PC 的做法是点开看（手机端 Shell 对应 ShellOutputSheet，子 Agent 过程查看尚未接入）。
  */
 export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell, onStopAgent }: BackgroundPillsProps) {
@@ -38,7 +38,8 @@ export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell
       {!!shells.length && <Pressable style={[styles.backgroundPill, styles.shellPill]} onPress={() => setExpanded((value) => value === 'shell' ? null : 'shell')}><ToolIcon name="bash" color={colors.success} /><Text style={[styles.backgroundPillText, styles.shellPillText]}>Shell · {shells.length}</Text></Pressable>}
     </View>
     {expanded === 'agent' && <View style={styles.backgroundPanel}>
-      <Text style={styles.panelTitle}>运行中的 Agent（{agents.length}）</Text>
+      {/* 措辞与桌面端 ui.AgentBar.runningAgents（'执行中的 Agent('）逐字一致 */}
+      <Text style={styles.panelTitle}>执行中的 Agent({agents.length})</Text>
       {agents.map((agent) => <View key={`${agent.delegationId}-${agent.index}`} style={styles.backgroundRow}>
         <SpinIcon size={iconSize.pill} />
         <Text numberOfLines={2} style={styles.backgroundText}>{agent.title}{agent.currentTool ? ` · ${agent.currentTool}` : ''}</Text>
@@ -51,7 +52,8 @@ export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell
       </View>)}
     </View>}
     {expanded === 'shell' && <View style={styles.backgroundPanel}>
-      <Text style={styles.panelTitle}>运行中的 Shell（{shells.length}）</Text>
+      {/* 桌面端 ui.ShellBar.runningShells（'运行中的 Shell('） */}
+      <Text style={styles.panelTitle}>运行中的 Shell({shells.length})</Text>
       {shells.map((shell) => <View key={shell.id} style={styles.backgroundRow}>
         <SpinIcon size={iconSize.pill} />
         <Pressable style={styles.shellCommandButton} onPress={() => onOpenShellOutput(shell)}>
