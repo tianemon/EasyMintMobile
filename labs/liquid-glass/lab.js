@@ -1,3 +1,4 @@
+import { APP_PRESET } from './app-preset.js';
 import { materialFragment } from './material.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -43,17 +44,22 @@ const groups = [
     ['tintDark', '暗色模式黑色染色', 0, 0.2, 0.005, 0.035, '比例'],
   ]],
 ];
+for (const [, fields] of groups) {
+  for (const field of fields) {
+    if (APP_PRESET.parameters[field[0]] !== undefined) field[5] = APP_PRESET.parameters[field[0]];
+  }
+}
 const definitions = groups.flatMap(([, fields]) => fields);
 const defaults = Object.fromEntries(definitions.map(([key, , , , , value]) => [key, value]));
 let parameters = { ...defaults };
 let compareBaseline = false;
-const positions = [{ x: 16, y: 470 }, { x: 260, y: 285 }];
+const positions = APP_PRESET.positions.map((position) => ({ ...position }));
 const stage = $('#stage');
 const canvas = $('#canvas');
 const gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
 let invalidate = true;
 let backgroundDirty = true;
-let currentScroll = 0;
+let currentScroll = APP_PRESET.scroll;
 let lastTime = 0;
 let frameId;
 let activeDrag = null;
@@ -199,10 +205,9 @@ $('#reset').addEventListener('click', () => {
   parameters = { ...defaults };
   compareBaseline = false;
   baselineButton.setAttribute('aria-pressed', 'false');
-  positions[0] = { x: 16, y: 470 };
-  positions[1] = { x: 260, y: 285 };
-  currentScroll = 0;
-  $('#scroll').value = 0;
+  APP_PRESET.positions.forEach((position, index) => { positions[index] = { ...position }; });
+  currentScroll = APP_PRESET.scroll;
+  $('#scroll').value = currentScroll;
   $('#autoScroll').checked = false;
   updateControls();
   positionContent();
@@ -254,6 +259,11 @@ $('#file').addEventListener('change', async (event) => {
   }
   event.target.value = '';
 });
+
+$('#theme').value = APP_PRESET.theme;
+$('#background').value = APP_PRESET.background;
+$('#scroll').value = currentScroll;
+document.body.classList.toggle('dark', APP_PRESET.theme === 'dark');
 
 const backgroundCanvas = document.createElement('canvas');
 backgroundCanvas.width = canvas.width;

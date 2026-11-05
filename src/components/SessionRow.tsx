@@ -25,13 +25,15 @@ type SessionRowProps = {
 export function SessionRow({ session, first, onPress, onLongPress }: SessionRowProps) {
   const styles = useThemedStyles(makeStyles);
   const time = formatSessionTime(session.updatedAt);
+  // Also normalize previews from older desktop versions that still preserve Markdown line breaks.
+  const preview = session.lastMessage?.replace(/\s+/g, ' ').trim();
   return <Pressable delayLongPress={450} onPress={onPress} onLongPress={onLongPress}
     style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
     {!first && <View style={styles.divider} />}
     <View style={styles.main}>
       <Text numberOfLines={1} style={styles.title}>{session.title || '未命名会话'}</Text>
       <Text numberOfLines={2} style={styles.subtitle}>
-        {session.lastMessage || `${session.messageCount ?? 0} 条消息`}
+        {preview || `${session.messageCount ?? 0} 条消息`}
       </Text>
     </View>
     {!!time && <Text style={styles.time}>{time}</Text>}

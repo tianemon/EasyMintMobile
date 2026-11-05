@@ -107,7 +107,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   em: { fontStyle: 'italic' },
   del: { textDecorationLine: 'line-through' },
   // 与桌面端 prose 的行内代码一致：等宽 + 600 字重 + 13px；底色是手机端方案指定的 codeBlockBg
-  codespan: { color: colors.textPrimary, backgroundColor: colors.codeBlockBg, fontFamily: monoFont, fontSize: fontSize.detail, fontWeight: '600' },
+  codespan: { color: colors.textPrimary, backgroundColor: colors.chatInset, fontFamily: monoFont, fontSize: fontSize.detail, fontWeight: '600' },
   link: { color: colors.accent },
   imageAlt: { color: colors.textMuted },
 });

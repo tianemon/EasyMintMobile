@@ -11,14 +11,13 @@ type ProjectTitleProps = {
   onPress: () => void;
 };
 
-/** 标题栏中部的当前项目名（点击回项目列表，右侧带连接状态灯） */
-export function ProjectTitle({ name, status, onPress }: ProjectTitleProps) {
+/** 标题栏中部的当前项目名（点击回项目列表） */
+export function ProjectTitle({ name, onPress }: ProjectTitleProps) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   return <Pressable accessibilityLabel="切换项目" onPress={onPress} style={styles.projectTitleButton}>
     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none"><Path d="m6 9 6 6 6-6" stroke={colors.projectChevron} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
     <Text numberOfLines={1} style={styles.projectTitleText}>{name}</Text>
-    <View style={[styles.titleStatusLight, status === 'connected' ? styles.connectionLightOn : status === 'connecting' ? styles.connectionLightPending : styles.connectionLightOff]} />
   </Pressable>;
 }
 

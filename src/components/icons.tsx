@@ -399,9 +399,9 @@ export function SendIcon({ stop }: { stop: boolean }) {
 }
 
 /** 新建会话悬浮按钮图标（圆角气泡 + 加号，与桌面 SessionBar 同源） */
-export function NewChatIcon() {
+export function NewChatIcon({ color }: { color?: string } = {}) {
   const { colors } = useTheme();
-  return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"><Path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" stroke={colors.textInverse} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /><Path d="M8 12h8M12 8v8" stroke={colors.textInverse} strokeWidth={1.8} strokeLinecap="round" /></Svg>;
+  return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"><Path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" stroke={color ?? colors.textInverse} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /><Path d="M8 12h8M12 8v8" stroke={color ?? colors.textInverse} strokeWidth={1.8} strokeLinecap="round" /></Svg>;
 }
 
 // ── 界面级图标：设置齿轮 / 归档时钟 / 外观三档 ────────────────────────────

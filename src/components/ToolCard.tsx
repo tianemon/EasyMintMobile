@@ -208,16 +208,16 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   permission: { flexShrink: 0, color: colors.textMuted, fontSize: fontSize.caption },
   stats: { flexShrink: 0, fontSize: fontSize.caption },
   duration: { flexShrink: 0, color: colors.textMuted, fontSize: fontSize.caption },
-  diffBody: { marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.codeSurface, paddingHorizontal: 6, paddingVertical: 4 },
-  textScroll: { flexGrow: 0, flexShrink: 0, maxHeight: TEXT_BODY_MAX_HEIGHT, marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.codeSurface },
+  diffBody: { marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.chatCode, paddingHorizontal: 6, paddingVertical: 4 },
+  textScroll: { flexGrow: 0, flexShrink: 0, maxHeight: TEXT_BODY_MAX_HEIGHT, marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.chatCode },
   // 桌面端 ChatBlocks.tsx:848 同口径：超过 30 行只留尾部 20 行；限高放在 ScrollView 上才能滚。
   output: { padding: 9, color: colors.textSecondary, fontFamily: monoFont, fontSize: fontSize.detail, lineHeight: fontSize.detail * BASH_LINE_HEIGHT },
   // 命令类展开区：外层比气泡深一档（PC 的 thinking-body），内层命令块再深一档（cmd-box）
-  bashBody: { marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.thinkingBody },
+  bashBody: { marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.chatPanel },
   // flexGrow/flexShrink 必须显式钳死：否则会被 Yoga 当弹性项撑成畸形高度（同思考块）
   bashScroll: { flexGrow: 0, flexShrink: 0, maxHeight: BASH_BODY_MAX_HEIGHT },
   bashScrollContent: { paddingHorizontal: 8, paddingVertical: 8 },
-  bashCommand: { borderRadius: radius.lg, backgroundColor: colors.cmdBox, paddingHorizontal: 8, paddingVertical: 6 },
+  bashCommand: { borderRadius: radius.lg, backgroundColor: colors.chatInset, paddingHorizontal: 8, paddingVertical: 6 },
   bashCommandText: { color: colors.textSecondary, fontFamily: monoFont, fontSize: fontSize.detail, lineHeight: fontSize.detail * BASH_LINE_HEIGHT },
   bashOutput: { marginTop: 6, color: colors.textSecondary, fontFamily: monoFont, fontSize: fontSize.detail, lineHeight: fontSize.detail * BASH_LINE_HEIGHT },
   nested: { marginTop: 2, marginLeft: space.s3, paddingLeft: space.s2, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },

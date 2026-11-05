@@ -3,7 +3,7 @@
     "name": "EasyMint",
     "slug": "easymint-mobile",
     "scheme": "easymint",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/brand/appicon.png",
     "userInterfaceStyle": "automatic",
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.easymint.mobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",

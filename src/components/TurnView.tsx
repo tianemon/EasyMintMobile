@@ -184,7 +184,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // 单行截断就退化成溢出（文字被画到容器外面）而不是省略号
   processHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3, alignSelf: 'flex-start', maxWidth: '100%' },
   processLabel: { flexShrink: 1, color: colors.toolTitle, fontSize: fontSize.caption, fontWeight: '600' },
-  detail: { marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.thinkingBody, paddingHorizontal: 8, paddingVertical: 6 },
+  detail: { marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.chatPanel, paddingHorizontal: 8, paddingVertical: 6 },
   detailScroll: { flexGrow: 0, flexShrink: 0, maxHeight: DETAIL_MAX_HEIGHT },
   thinkingText: { color: colors.textSecondary, fontFamily: monoFont, fontSize: fontSize.detail, lineHeight: fontSize.detail * 1.625, marginBottom: 4 },
   bubble: { flexGrow: 0, flexShrink: 0, maxWidth: '88%', padding: 13, borderRadius: radius.lg, marginBottom: space.s2 },

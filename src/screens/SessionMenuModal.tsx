@@ -1,13 +1,14 @@
+import type { RefObject } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Glass } from '../components/Glass';
 import type { SessionListItem } from '../protocol/types';
-import { makeCommonStyles } from '../theme/commonStyles';
 import type { ThemeColors } from '../theme/tokens';
 import { fontSize, radius } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 
 type SessionMenuModalProps = {
+  blurTarget: RefObject<View | null>;
   visible: boolean;
   session: SessionListItem | null;
   renameTitle: string;
@@ -26,10 +27,9 @@ export function SessionMenuModal(props: SessionMenuModalProps) {
   const { session, renameTitle } = props;
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const commonStyles = useThemedStyles(makeCommonStyles);
   return <Modal transparent visible={props.visible} animationType="fade" onRequestClose={props.onRequestClose}>
     <View style={styles.menuOverlay}><Pressable style={StyleSheet.absoluteFill} onPress={props.onDismiss} />
-      <Glass variant="frosted" radius={20} fill={colors.sheetBg} style={styles.messageMenu} contentStyle={styles.menuContent}>
+      <Glass variant="frosted" radius={20} blur blurTarget={props.blurTarget} fill={colors.frostedSheetFill} style={styles.messageMenu} contentStyle={styles.menuContent}>
         <Text style={styles.messageMenuTitle}>会话操作</Text>
         {!!session && <>
           <TextInput style={styles.input} value={renameTitle} onChangeText={props.onRenameTitleChange} placeholder="会话标题" placeholderTextColor={colors.textMuted} />

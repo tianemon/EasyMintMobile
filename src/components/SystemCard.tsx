@@ -65,7 +65,7 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
     <Pressable disabled={!collapsible} style={styles.systemHeader} onPress={() => setExpanded((value) => !value)}>
       <SystemKindIcon kind={kind} color={isError ? errorColor : undefined} />
       {/* 标题栏与桌面端 ChatPanel.tsx:3414-3424 同序：kind 图标 → ⏺（着状态色）→ 标签 →「- 状态 · Ns」 */}
-      {!!status && <Text style={[styles.systemStatus, { color: statusColor(status[2]) }]}>⏺</Text>}
+      {!!status && <View accessible={false} style={[styles.statusDot, { backgroundColor: statusColor(status[2]) }]} />}
       <Text style={styles.systemLabel}>{SYSTEM_LABELS[kind] ?? '系统消息'}</Text>
       {!!status && <Text style={styles.systemStatus}>
         {'- '}<Text style={{ color: statusColor(status[2]) }}>{status[2]}</Text>{status[3] ? ` · ${status[3]}s` : ''}
@@ -99,10 +99,10 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
             });
           }}><Text style={styles.authLink}>{authLink.label}: {authLink.url}</Text></Pressable>;
           const parsed = row.startsWith('⏺ ') ? row.match(RESULT_ROW_RE) : null;
-          if (!parsed) return row.trim() === '' ? null : <Text key={index} selectable style={styles.bodyLine}>{row}</Text>;
+          if (!parsed) return row.trim() === '' ? null : <Text key={index} selectable style={styles.bodyLine}>{row.replace(/^⏺(?=\s)/, '●')}</Text>;
           const color = statusColor(parsed[2]);
           return <Text key={index} selectable style={styles.bodyLine}>
-            <Text style={{ color }}>⏺ </Text>
+            <Text style={[styles.inlineDot, { color }]}>● </Text>
             <Text style={styles.resultName}>{parsed[1]}</Text>
             <Text style={styles.resultStatus}> - <Text style={{ color }}>{parsed[2]}</Text></Text>
             {parsed[3] ? <Text style={styles.resultDuration}> • {parsed[3]}s</Text> : null}
@@ -134,9 +134,12 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // 左侧系统卡片，与 assistant 气泡左对齐（PC 是 padding 32 + 头像占位 40 后对齐内容列；手机无头像列，
   // 所以不能缩进——早先的 marginLeft 54 会把卡片从左侧推开，展开后更是一路撑到右侧，看着像跑到用户侧了）
-  systemCard: { maxWidth: '82%', alignSelf: 'flex-start', borderRadius: radius.lg, borderBottomLeftRadius: 4, backgroundColor: colors.card, overflow: 'hidden' },
+  systemCard: { maxWidth: '82%', alignSelf: 'flex-start', borderRadius: radius.lg, borderBottomLeftRadius: 4, backgroundColor: colors.chatPanel, overflow: 'hidden' },
   systemHeader: { minHeight: 36, paddingHorizontal: space.s3, flexDirection: 'row', alignItems: 'center', gap: 6 },
   systemLabel: { color: colors.systemLabel, fontSize: fontSize.caption, fontWeight: '600' },
+  // Avoid U+23FA: Android/iOS can render it as a colored emoji button, ignoring text color.
+  statusDot: { width: 6, height: 6, borderRadius: radius.full, marginHorizontal: 1 },
+  inlineDot: { fontSize: fontSize.xxs },
   systemStatus: { color: colors.textPrimary, fontSize: fontSize.caption, fontWeight: '600' },
   systemChevron: { marginLeft: 'auto' },
   summaryScroll: { flexGrow: 0, flexShrink: 0, maxHeight: SUMMARY_BODY_MAX_HEIGHT },

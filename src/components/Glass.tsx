@@ -3,6 +3,7 @@ import type { ReactNode, RefObject } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { hasNativeLens, LensBackdrop } from './LensBackdrop';
+import { SystemGlassBackdrop, useSystemGlass } from './SystemGlass';
 import { BlurView } from 'expo-blur';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../theme/theme-context';
@@ -13,7 +14,7 @@ type GlassProps = {
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
   /**
-   * liquid：高透 + 渐变光学边框 + 左上高光，只给输入卡这类浮层。
+   * liquid：Android 自定义折射 / iOS 系统玻璃，用于输入卡和圆形悬浮按钮。
    * frosted：更实的底 + 1px 淡边，给容器层（列表面板、设置分组、按钮）。
    */
   variant?: GlassVariant;
@@ -60,11 +61,17 @@ export function Glass({
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const tint = effectiveMode === 'dark' ? 'dark' : 'light';
   const dark = effectiveMode === 'dark';
-  const background = fill ?? (variant === 'liquid' ? colors.liquidFill : colors.glassFillStrong);
+  const systemGlass = useSystemGlass(variant === 'liquid' && blur);
+  const nativeGlass = systemGlass === 'native';
+  const liquidFallback = systemGlass === 'blur' || systemGlass === 'opaque';
+  const liquidDecorations = variant === 'liquid' && !nativeGlass && !liquidFallback;
+  const background = liquidFallback
+    ? systemGlass === 'opaque' ? colors.card : colors.glassFillStrong
+    : fill ?? (variant === 'liquid' ? colors.liquidFill : colors.glassFillStrong);
   const [size, setSize] = useState({ width: 0, height: 0 });
   // The native shader supplies the reflection and thickness from one surface.
   // Keep the SVG rim for platforms using the blur-only fallback.
-  const opticalRim = blur && blurTarget && hasNativeLens ? 'none' : rim;
+  const opticalRim = nativeGlass || (variant === 'liquid' && blur && blurTarget && hasNativeLens) ? 'none' : rim;
 
 
   return <View
@@ -86,16 +93,17 @@ export function Glass({
     ]}>
     <View style={[styles.clip, { borderRadius: radius }]}>
       {/* 材质层都不接触摸 */}
-      {blur && <LensBackdrop radius={variant === 'liquid' ? radius : 0} target={blurTarget}>
-        <BlurView pointerEvents="none" tint={tint} intensity={intensity} blurTarget={blurTarget}
+      {nativeGlass && <SystemGlassBackdrop radius={radius} colorScheme={effectiveMode} />}
+      {blur && !nativeGlass && systemGlass !== 'opaque' && <LensBackdrop radius={liquidDecorations ? radius : 0} target={blurTarget}>
+        <BlurView pointerEvents="none" tint={tint} intensity={liquidFallback ? 44 : intensity} blurTarget={blurTarget}
           blurMethod="dimezisBlurViewSdk31Plus" style={StyleSheet.absoluteFill} />
       </LensBackdrop>}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: background }]} />
+      {!nativeGlass && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: background }]} />}
 
-      {variant === 'frosted' && opticalRim !== 'none' && <View pointerEvents="none"
+      {(variant === 'frosted' || liquidFallback) && opticalRim !== 'none' && <View pointerEvents="none"
         style={[styles.border, { borderRadius: radius, borderColor: colors.glassRim, opacity: 0.5 }]} />}
 
-      {variant === 'liquid' && <>
+      {liquidDecorations && <>
         {/*
          * 光学层照桌面端模板（private_docs/design/liquid-glass-comparison-2026-10-24 的
          * `.ios-optic` / `:before` / `.ios-optic-light`）逐条复制。模板是纯 CSS，但那几层都是

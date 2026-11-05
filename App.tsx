@@ -2,7 +2,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, BackHandler, Platform } from 'react-native';
+import { Alert, BackHandler, Platform, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientBackground } from './src/components/AmbientBackground';
 import { LoadingView } from './src/components/LoadingView';
@@ -81,6 +81,7 @@ function AppContent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [composerControl, setComposerControl] = useState<ComposerControl>(null);
   const [renameTitle, setRenameTitle] = useState('');
+  const sessionBackdrop = useRef<View>(null);
   const [menuSession, setMenuSession] = useState<SessionListItem | null>(null);
   /** 正在查看输出的后台命令（只存打开时的 id/命令：命令结束后从运行态清单里消失，弹层仍要保留内容） */
   const [viewingShell, setViewingShell] = useState<{ id: string; command: string } | null>(null);
@@ -486,7 +487,7 @@ function AppContent() {
     onBack={() => setPage('home')} onRepair={() => setPage('scanner')} onForget={forgetPc} />;
   else if (page === 'projects') content = <ProjectsScreen projects={projects} statusLabel={statusLabel}
     onBack={() => setPage('home')} onOpenProject={(item) => void refreshSessions(item)} />;
-  else if (page === 'sessions') content = <SessionsScreen project={project} connection={connection} sessions={sessions}
+  else if (page === 'sessions') content = <SessionsScreen blurTarget={sessionBackdrop} project={project} connection={connection} sessions={sessions}
     refreshing={reloading}
     onRefresh={() => { setReloading(true); void reloadSessions().finally(() => setReloading(false)); }}
     onOpenArchive={() => setArchiveOpen(true)}
@@ -505,7 +506,7 @@ function AppContent() {
   return <SafeAreaProvider>
     <AmbientBackground />
     <SafeAreaView style={commonStyles.safe} edges={page === 'chat' ? ['bottom', 'left', 'right'] : ['top', 'bottom']}><StatusBar style={effectiveMode === 'dark' ? 'light' : 'dark'} />{content}
-    <SessionMenuModal visible={settingsOpen} session={menuSession} renameTitle={renameTitle}
+    <SessionMenuModal blurTarget={sessionBackdrop} visible={settingsOpen} session={menuSession} renameTitle={renameTitle}
       onRenameTitleChange={setRenameTitle}
       onDismiss={() => { setSettingsOpen(false); setMenuSession(null); }}
       onRequestClose={() => setSettingsOpen(false)}

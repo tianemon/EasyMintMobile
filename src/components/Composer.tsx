@@ -60,9 +60,9 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_R; // 50.27
 
 /** 与 PC 的 ctxTip 同口径 */
 function contextTip(percent: number | null, windowTokens: number | null): string {
-  if (windowTokens === null) return percent === null ? '上下文使用率' : `上下文使用率 ${Math.round(percent)}%`;
+  if (windowTokens === null) return percent === null ? '上下文用量暂未上报' : `上下文使用率 ${Math.round(percent)}%`;
   const windowLabel = formatTokenWindow(windowTokens);
-  return percent === null ? `上下文窗口 ${windowLabel}` : `上下文窗口 ${windowLabel} · 已用 ${Math.round(percent)}%`;
+  return percent === null ? `上下文窗口 ${windowLabel} · 用量暂未上报` : `上下文窗口 ${windowLabel} · 已用 ${Math.round(percent)}%`;
 }
 
 /** 与 PC 的 formatTokenWindow 同口径（十进制优先：128000 同时是 125×1024，先判 1024 会显示成 125K） */
@@ -78,7 +78,7 @@ function formatTokenWindow(tokens: number): string {
  * memo：流式期间 App 每帧重渲染，props 未变时跳过整块输入卡（调用方需传稳定 props，见 App 的 composer）。
  */
 export const Composer = memo(function Composer(props: ComposerProps) {
-  const { colors, shadow } = useTheme();
+  const { colors, shadow, effectiveMode } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const commonStyles = useThemedStyles(makeCommonStyles);
   const { draft, running, compacting, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, contextWindow, control, attachments } = props;
@@ -95,7 +95,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const showStop = !compacting && running && hasSession && !hasContent;
   const sendDisabled = compacting || (!showStop && !hasContent);
   return <View style={styles.composerCard}>
-    {/* 全 App 唯一一块液态玻璃：消息在卡片背后滚动，折射与模糊都真实发生在这块表面上 */}
+    {/* 与首页/会话列表的悬浮按钮共用液态材质：消息在卡片背后滚动，折射与模糊都真实发生在这块表面上 */}
     <Glass variant="liquid" blur radius={24} intensity={8} sheen={false} blurTarget={props.blurTarget} elevated={false} fill={colors.liquidClearFill} style={styles.composerGlass} />
     {!!attachments.length && <View style={styles.attachmentPreview}>{attachments.map((attachment) => <View key={attachment.id} style={styles.attachmentItem}>
       {attachment.kind === 'image'
@@ -109,7 +109,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     {/* 占位文案与桌面端同序：压缩中 > 运行中 > 空闲（ChatInput.tsx:438） */}
     <TextInput value={draft} onChangeText={props.onDraftChange} editable={!compacting}
       placeholder={compacting ? '正在整理上下文，请稍候' : running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'}
-      placeholderTextColor={colors.textMuted} multiline style={styles.composerInput} />
+      placeholderTextColor={colors.textMuted} keyboardAppearance={effectiveMode} multiline style={styles.composerInput} />
     <View style={styles.composerToolbar}>
       {/* 回形针：与模型/权限/思考共用 control 槽位，展开互斥（打开附件菜单会收起另三个） */}
       <Pressable accessibilityLabel="添加附件" accessibilityState={{ expanded: control === 'attachment' }}
@@ -137,13 +137,13 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             strokeDasharray={RING_CIRCUMFERENCE}
             strokeDashoffset={contextPercent === null ? RING_CIRCUMFERENCE : RING_CIRCUMFERENCE * (1 - contextPercent / 100)} />
         </Svg>
-        {showContextTip && <View style={[styles.contextTip, shadow.sm]}><Text numberOfLines={1} style={styles.contextTipText}>{contextTipText}</Text></View>}
       </Pressable>
       <Pressable disabled={sendDisabled} onPress={() => showStop ? props.onStop() : props.onSend()}
         style={({ pressed }) => [styles.sendButton, (pressed || sendDisabled) && commonStyles.dim, showStop && styles.stopButton]}>
         <SendIcon stop={showStop} />
       </Pressable>
     </View>
+    {showContextTip && <View accessibilityLiveRegion="polite" style={[styles.contextTip, shadow.sm]}><Text style={styles.contextTipText}>{contextTipText}</Text></View>}
     {/* 附件菜单：两个整行按钮上下排布（图片在上、文档在下），不套列表行的样式——
         选中后先收起菜单再唤系统选择器，避免选择器盖在菜单上 */}
     {control === 'attachment' && <View style={styles.attachmentMenu}>
@@ -196,7 +196,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // PC 的 .ctx-ring svg：整体旋转 -90°，让进度从 12 点方向起画
   contextRingSvg: { transform: [{ rotate: '-90deg' }] },
   // 锚在左侧向右生长：圆环左边只剩约 100px，靠右锚定会把文字撩出屏幕外
-  contextTip: { position: 'absolute', bottom: 32, left: -8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.elevated },
+  contextTip: { position: 'absolute', bottom: 52, right: 48, maxWidth: '85%', paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.elevated },
   contextTipText: { color: colors.textPrimary, fontSize: fontSize.caption, fontWeight: '600' },
   sendButton: { marginLeft: 2, marginRight: 6, width: 32, height: 32, borderRadius: radius.lg, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   stopButton: { backgroundColor: colors.dangerBg },

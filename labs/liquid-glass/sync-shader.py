@@ -1,92 +1,19 @@
-"""Generate the browser material from the accepted Android AGSL source."""
+"""Generate the browser material from the shipped Android AGSL asset."""
 from pathlib import Path
-import re
-
+import re, json
 ROOT = Path(__file__).resolve().parents[2]
-NATIVE = ROOT / 'modules/mint-lens/android/src/main/java/em/lens/LensModule.kt'
-source = NATIVE.read_text().split('private const val SOURCE = """', 1)[1].split('"""', 1)[0]
-source = source.replace('uniform shader backdrop;', '')
+ASSETS = ROOT / 'modules/mint-lens/android/src/main/assets'
+source = (ASSETS / 'em-liquid-material.agsl').read_text().replace('uniform shader backdrop;', '')
 for kind, replacement in [('half4','vec4'),('half3','vec3'),('float3','vec3'),('float2','vec2'),('half','float')]:
     source = re.sub(r'\b'+kind+r'\b', replacement, source)
-source = re.sub(r'uniform (vec2|float) (size|radius|bevel|refractionWidth|pixelScale|padding);',r'\1 \2;',source)
-source = re.sub(r'(?m)^\s*(?:vec2|float) (?:size|radius|bevel|refractionWidth|pixelScale|padding);', '', source)
-source = source.replace('backdrop.eval(', 'sampleCapture(')
-source = source.replace('vec4 main(vec2 sourcePoint)', 'vec4 shadeGlass(vec2 sourcePoint)')
-parameters = {
-    'heightRatio': ('refractionWidth * 0.48', 'refractionWidth * u_heightRatio'),
-    'normalStep': ('localWidth * 0.152', 'localWidth * u_normalStep'),
-    'sideWidth': ('0.18 * lateralInfluence(p)', '(u_sideWidth - 1.0) * lateralInfluence(p)'),
-    'sideRim': ('0.12 * lateral', '(u_sideRim - 1.0) * lateral'),
-    'sideTravel': ('0.28 * lateral', '(u_sideTravel - 1.0) * lateral'),
-    'travel': ('bevel * 0.86', 'bevel * u_travel'),
-    'rimStrength': ('bevel * 0.13', 'bevel * u_rimStrength'),
-    'rimRange': ('smoothstep(0.0, 0.40, rimDepth)', 'smoothstep(0.0, u_rimRange, rimDepth)'),
-    'faceScale': ('* 0.988', '* u_faceScale'),
-    'dispersion': ('edgeSupport * 0.003', 'edgeSupport * u_dispersion'),
-    'rimDispersion': ('rimDispersion * 0.001', 'rimDispersion * u_rimDispersion'),
-    'darkEdge': ('lateralWeight * 0.16', 'lateralWeight * u_darkEdge'),
-    'brightEdge': ('horizontalWeight * 0.14', 'horizontalWeight * u_brightEdge'),
-    'edgeCenter': ('pixelScale * 0.40', 'pixelScale * u_edgeCenter'),
-    'edgeWidth': ('pixelScale * 0.30', 'pixelScale * u_edgeWidth'),
-}
-for name,(original,replacement) in parameters.items():
-    if source.count(original) != 1:
-        raise ValueError(f'{name}: expected exactly one native expression: {original}')
-    source = source.replace(original,replacement)
-source = source.replace('1.46', 'u_ior')
-source = source.replace('0.24 + 0.76 * localContrast', '(0.24 + 0.76 * localContrast) * u_adaptation')
-source = source.replace('section * (0.10 + 0.14 * localContrast)', 'section * (0.10 + 0.14 * localContrast) * u_environmentMix')
-header = '''#version 300 es
-precision highp float;
-uniform sampler2D uBackdrop;
-uniform sampler2D uScene;
-uniform vec2 uViewport;
-uniform vec4 uRects[2];
-uniform float uRadii[2];
-uniform float u_bevelRatio;
-uniform float u_width;
-uniform float u_tint;
-uniform float u_referenceScale;
-in vec2 vUv;
-out vec4 fragColor;
-'''
-header += ''.join(f'uniform float u_{name};\n' for name in parameters)
-header += 'vec2 size; float radius; float bevel; float refractionWidth; float pixelScale; float padding;\n'
-header += '''uniform float u_ior;
-uniform float u_adaptation;
-uniform float u_environmentMix;
-vec2 captureOrigin;
-vec4 sampleCapture(vec2 uv) {
-    vec2 globalPoint = captureOrigin + uv - padding;
-    vec2 textureUV = clamp(globalPoint / (uViewport * u_referenceScale), vec2(0.001), vec2(0.999));
-    return texture(uBackdrop, vec2(textureUV.x, 1.0 - textureUV.y));
-}
-'''
-footer = '''
-void main() {
-    vec2 point = vec2(vUv.x, 1.0 - vUv.y) * uViewport * u_referenceScale;
-    vec4 result = texture(uScene, vUv);
-    for (int i = 0; i < 2; i++) {
-        captureOrigin = uRects[i].xy * u_referenceScale;
-        size = uRects[i].zw * u_referenceScale;
-        radius = min(uRadii[i] * u_referenceScale, min(size.x, size.y) * 0.5);
-        pixelScale = u_referenceScale;
-        padding = 26.0 * u_referenceScale;
-        bevel = size.y * u_bevelRatio;
-        refractionWidth = bevel * u_width;
-        vec2 localPoint = point - captureOrigin;
-        float distance = surfaceDistance(localPoint);
-        if (distance < 1.0) {
-            vec4 glass = shadeGlass(localPoint + padding);
-            // Glass.tsx places a black tint above the optical surface.
-            glass.rgb *= 1.0 - u_tint;
-            float coverage = 1.0 - smoothstep(-0.6, 0.6, distance);
-            result = mix(result, glass, coverage);
-        }
-    }
-    fragColor = result;
-}
-'''
+source = re.sub(r'(?m)^\s*uniform (?:vec2|float) (?:size|radius|bevel|refractionWidth|pixelScale|padding);', '', source)
+source = source.replace('backdrop.eval(', 'sampleCapture(').replace('vec4 main(vec2 sourcePoint)', 'vec4 shadeGlass(vec2 sourcePoint)')
+
+header = '#version 300 es\nprecision highp float;\nuniform sampler2D uBackdrop;\nuniform sampler2D uScene;\nuniform vec2 uViewport;\nuniform vec4 uRects[2];\nuniform float uRadii[2];\nuniform float u_bevelRatio;\nuniform float u_width;\nuniform float u_tint;\nuniform float u_referenceScale;\nin vec2 vUv;\nout vec4 fragColor;\nvec2 size; float radius; float bevel; float refractionWidth; float pixelScale; float padding;\nvec2 captureOrigin;\nvec4 sampleCapture(vec2 uv) {\n    vec2 globalPoint = captureOrigin + uv - padding;\n    vec2 textureUV = clamp(globalPoint / (uViewport * u_referenceScale), vec2(0.001), vec2(0.999));\n    return texture(uBackdrop, vec2(textureUV.x, 1.0 - textureUV.y));\n}\n'
+footer = '\nvoid main() {\n    vec2 point = vec2(vUv.x, 1.0 - vUv.y) * uViewport * u_referenceScale;\n    vec4 result = texture(uScene, vUv);\n    for (int i = 0; i < 2; i++) {\n        captureOrigin = uRects[i].xy * u_referenceScale;\n        size = uRects[i].zw * u_referenceScale;\n        radius = min(uRadii[i] * u_referenceScale, min(size.x, size.y) * 0.5);\n        pixelScale = u_referenceScale;\n        padding = 26.0 * u_referenceScale;\n        bevel = size.y * u_bevelRatio;\n        refractionWidth = bevel * u_width;\n        vec2 localPoint = point - captureOrigin;\n        float distance = surfaceDistance(localPoint);\n        if (distance < 1.0) {\n            vec4 glass = shadeGlass(localPoint + padding);\n            // Glass.tsx places a black tint above the optical surface.\n            glass.rgb *= 1.0 - u_tint;\n            float coverage = 1.0 - smoothstep(-0.6, 0.6, distance);\n            result = mix(result, glass, coverage);\n        }\n    }\n    fragColor = result;\n}\n'
+
 output = Path(__file__).with_name('material.js')
-output.write_text('// Generated from LensModule.kt by sync-shader.py.\nexport const materialFragment = '+repr(header+source+footer)+';\n')
+output.write_text('// Generated from the Android material asset.\nexport const materialFragment = '+json.dumps(header+source+footer)+';\n')
+preset = json.loads((ASSETS/'em-liquid-app.json').read_text())
+Path(__file__).with_name('app-preset.js').write_text('export const APP_PRESET = '+json.dumps(preset,ensure_ascii=False,indent=2)+';\n')
 print(output)

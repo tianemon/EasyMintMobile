@@ -1,6 +1,6 @@
 # EasyMint 液态玻璃调参页
 
-从 `modules/mint-lens/android/src/main/java/em/lens/LensModule.kt` 的 AGSL 源码生成 WebGL 2 材质，默认采用 App 当前的光学参数。输入卡与圆形共用材质，圆形用于观察圆角光影和方向权重。
+从 `modules/mint-lens/android/src/main/assets/em-liquid-material.agsl` 生成 WebGL 2 材质，默认值来自同目录 `em-liquid-app.json`，默认采用 App 当前的光学参数。输入卡与圆形共用材质，圆形用于观察圆角光影和方向权重。
 
 ## 本地启动
 
@@ -26,9 +26,9 @@ python3 -m http.server 8147 --directory labs/liquid-glass
 
 ## 源码同步
 
-`sync-shader.py` 保留 Android 源码中的形状距离场、曲面法线、双界面折射、左右增强、额外边缘透镜、色散、背景自适应及细边轮廓计算。生成时将关键常量替换为可调 uniform，并检查对应原始表达式是否唯一。
+`sync-shader.py` 保留 Android 源码中的形状距离场、曲面法线、双界面折射、左右增强、额外边缘透镜、色散、背景自适应及细边轮廓计算。参数已由可调 uniform 绑定，生成时保留原始公式。
 
-原生公式变化后重新生成 `material.js`。如果同步脚本报告表达式不匹配，应对照 Android 源码更新参数映射和默认值，再生成。生成文件应和脚本一起提交。
+原生公式变化后重新生成 `material.js`。App 预设变化后应同时生成 `app-preset.js`。生成文件应和脚本一起提交。
 
 ## 浏览器与原生的差异
 

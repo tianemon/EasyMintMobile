@@ -171,7 +171,7 @@ export const AskCard = memo(function AskCard({ ask, onSubmit }: AskCardProps) {
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // PC 用毛玻璃（backdrop-blur）；RN 没有等价物，用卡片面 + 描边 + 阴影近似（层次靠色差，同设计语言）
-  card: { marginTop: space.s1, marginBottom: space.s2, paddingHorizontal: space.s3, paddingBottom: space.s3, backgroundColor: colors.elevated, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  card: { marginTop: space.s1, marginBottom: space.s2, paddingHorizontal: space.s3, paddingBottom: space.s3, backgroundColor: colors.frostedSheetFill, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.chatDivider },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingTop: 6 },
   navButton: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg },
   navDisabled: { opacity: 0.3 },

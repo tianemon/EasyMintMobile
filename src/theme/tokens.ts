@@ -1,3 +1,4 @@
+import liquidPreset from '../../modules/mint-lens/android/src/main/assets/em-liquid-app.json';
 import type { ViewStyle } from 'react-native';
 
 /**
@@ -52,6 +53,11 @@ export const lightColors = {
   black: '#000000', // 阴影/文字阴影基色
 
   // ── 内容区（代码 / 思考 / 命令 / 工具）────────────
+  // 手机阅读区：让环境色自然透过，避免桌面米色/实灰色块打断背景。
+  chatPanel: 'rgba(255,255,255,0.28)',
+  chatInset: 'rgba(24,46,37,0.055)',
+  chatCode: 'rgba(255,255,255,0.48)',
+  chatDivider: 'rgba(43,68,55,0.14)',
   thinkingBody: '#e9ece9', // --thinking-body
   cmdBox: '#f3f3f1', // --color-cmd-box
   codeBlockBg: '#faf7f1', // --color-code-block-bg
@@ -85,7 +91,7 @@ export const lightColors = {
   glassFill: 'rgba(255,255,255,0.28)',
   /** 液态玻璃底色：照模板 --ios-glass-fill(#e4eaf252) 取冷调，不用纯白——纯白在亮底上就是一块白板 */
   liquidFill: 'rgba(228,234,242,0.20)',
-  liquidClearFill: 'rgba(0,0,0,0.045)',
+  liquidClearFill: 'rgba(0,0,0,' + liquidPreset.parameters.tintLight + ')',
   glassFillStrong: 'rgba(255,255,255,0.66)',
   glassRim: 'rgba(255,255,255,0.78)',
   glassSheen: 'rgba(255,255,255,0.40)',
@@ -95,6 +101,9 @@ export const lightColors = {
   /** 外观分段滑块的轨道与滑块（桌面端无此组件；结构取自 EasyEdit，色值按本app中性灰校准） */
   segmentBg: '#ededeb',
   segmentThumb: '#ffffff',
+  floatingActionIcon: '#247549',
+  frostedSheetFill: 'rgba(248,250,248,0.78)',
+  frostedSelection: 'rgba(255,255,255,0.62)',
   sheetBg: '#f9faf6', // 会话操作底部弹层
   sheetText: '#28322b',
   overlay: 'rgba(24,31,25,0.38)', // 弹层遮罩
@@ -155,6 +164,10 @@ export const darkColors: ThemeColors = {
   black: '#000000', // 阴影基色
 
   // ── 内容区 ───────────────────────────────────
+  chatPanel: 'rgba(255,255,255,0.045)',
+  chatInset: 'rgba(0,0,0,0.14)',
+  chatCode: 'rgba(7,15,20,0.32)',
+  chatDivider: 'rgba(223,234,239,0.10)',
   thinkingBody: '#171717', // --thinking-body（比 card-agent 深一档）
   cmdBox: '#202020', // --color-cmd-box（比 thinking-body 亮一档）
   codeBlockBg: '#1d1d23', // --color-code-block-bg
@@ -188,7 +201,7 @@ export const darkColors: ThemeColors = {
   ambientCool: '#19334b',
   glassFill: 'rgba(255,255,255,0.10)',
   liquidFill: 'rgba(255,255,255,0.04)',
-  liquidClearFill: 'rgba(0,0,0,0.035)',
+  liquidClearFill: 'rgba(0,0,0,' + liquidPreset.parameters.tintDark + ')',
   // 深色玻璃用「薄白」而不是「深灰」：深灰叠加在暗背景上会把面板压成一块黑板，
   // 实测面板内外只差 10 个灰阶，完全没有材质感
   glassFillStrong: 'rgba(255,255,255,0.06)',
@@ -198,6 +211,9 @@ export const darkColors: ThemeColors = {
   glassPress: 'rgba(255,255,255,0.07)',
   segmentBg: '#1f1f1f',
   segmentThumb: '#333333',
+  floatingActionIcon: '#b1d7bf',
+  frostedSheetFill: 'rgba(26,29,28,0.83)',
+  frostedSelection: 'rgba(255,255,255,0.10)',
   sheetBg: '#1c1c1c', // 会话操作弹层：与 elevated 同档（弹层靠描边+阴影分层）
   sheetText: '#d4d4d4', // 弹层标题文字：与 textPrimary 同值
   overlay: 'rgba(0,0,0,0.6)', // 遮罩：亮色是浅绿灰半透明，深色改为纯黑加压

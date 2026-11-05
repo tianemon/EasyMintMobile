@@ -12,7 +12,6 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { HEADER_HEIGHT, Header } from '../components/Header';
 import { Glass } from '../components/Glass';
 import { MessageList } from '../components/MessageList';
-import { ConnectionIndicator } from '../components/ProjectTitle';
 import type { BackgroundAgent, BackgroundShell, PendingAsk } from '../protocol/types';
 import type { DisplayMessage } from '../session/messages';
 import { makeCommonStyles } from '../theme/commonStyles';
@@ -66,7 +65,9 @@ export function ChatScreen(props: ChatScreenProps) {
     <View style={commonStyles.fill}>
       {/* 列表铺满整页（一直延伸到输入卡下面），玻璃才有内容可透过 */}
       <BlurTargetView ref={blurTarget} style={[StyleSheet.absoluteFill, styles.blurTarget]}>
-        <AmbientBackground style={{ bottom: -insets.bottom }} />
+        {/* iOS captures the real backdrop itself: keep only the full-window background in App.
+            A second gradient here would resize with KeyboardAvoidingView and expose a seam. */}
+        {Platform.OS === 'android' && <AmbientBackground style={{ bottom: -insets.bottom }} />}
         <ErrorBoundary label="消息区渲染出错"><MessageList messages={props.messages} running={props.running}
           askId={props.pendingAsk?.requestId} tail={tail} bottomInset={floatingHeight} topInset={HEADER_HEIGHT + insets.top}
           // 状态文案只在运行中给；具体渲不渲染由 MessageList 判断（有 live 过程时由回合行承担）
@@ -76,7 +77,9 @@ export function ChatScreen(props: ChatScreenProps) {
             高度写死不跟输入卡高度联动——之前按「卡片高度 + 96」铺，等于在卡片上方又压了一条
             半透明色带：卡片本身是透明玻璃，背后被这条带子盖住，看起来就是「卡片是白色的」，
             而且色带是矩形，卡片圆角外侧会露出直角边。 */}
-        <View pointerEvents="none" style={styles.fade}>
+        {/* Android's capture owns this fade. On iOS it would tint only the keyboard-resized
+            content area, leaving a hard edge above the unchanged bottom safe area. */}
+        {Platform.OS === 'android' && <View pointerEvents="none" style={styles.fade}>
           <Svg style={StyleSheet.absoluteFill}>
             <Defs>
               <LinearGradient id="chat-bottom-fade" x1="0" y1="0" x2="0" y2="1">
@@ -87,13 +90,13 @@ export function ChatScreen(props: ChatScreenProps) {
             </Defs>
             <Rect width="100%" height="100%" fill="url(#chat-bottom-fade)" />
           </Svg>
-        </View>
+        </View>}
       </BlurTargetView>
       <View pointerEvents="box-none" style={[styles.topBar, { paddingTop: insets.top }]}>
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           <Glass blur blurTarget={blurTarget} radius={0} intensity={42} elevated={false} rim="none" style={commonStyles.fill} />
         </View>
-        <Header title={props.title} onBack={props.onBack} right={<ConnectionIndicator status={props.connection} />} />
+        <Header title={props.title} onBack={props.onBack} />
       </View>
       <View style={styles.floating} pointerEvents="box-none"
         onLayout={(event) => setFloatingHeight(event.nativeEvent.layout.height)}>

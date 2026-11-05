@@ -1,3 +1,7 @@
+import type { RefObject } from 'react';
+import { BlurTargetView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AmbientBackground } from '../components/AmbientBackground';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Header } from '../components/Header';
 import { Glass } from '../components/Glass';
@@ -14,6 +18,7 @@ import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { ConnectionStatus } from '../types';
 
 type SessionsScreenProps = {
+  blurTarget: RefObject<View | null>;
   project: OpenProject | null;
   connection: ConnectionStatus;
   sessions: SessionListItem[];
@@ -34,6 +39,7 @@ type SessionsScreenProps = {
  * 归档会话不混在这里——右上角时钟进归档弹层（主列表只放未归档的）。
  */
 export function SessionsScreen(props: SessionsScreenProps) {
+  const insets = useSafeAreaInsets();
   const { project, connection, sessions } = props;
   const styles = useThemedStyles(makeStyles);
   const commonStyles = useThemedStyles(makeCommonStyles);
@@ -41,6 +47,9 @@ export function SessionsScreen(props: SessionsScreenProps) {
   const visible = sessions.filter((item) => !item.archivedAt);
 
   return <View style={commonStyles.fill}>
+    <BlurTargetView ref={props.blurTarget} style={commonStyles.fill}>
+    {/* Match the full-window background behind the system bars, rather than restarting the gradient inside the safe area. */}
+    <AmbientBackground style={{ top: -insets.top, bottom: -insets.bottom }} />
     <Header
       onBack={props.onBack}
       title={<ProjectTitle name={project?.name ?? '选择项目'} status={connection} onPress={props.onSwitchProject} />}
@@ -61,7 +70,8 @@ export function SessionsScreen(props: SessionsScreenProps) {
       renderItem={({ item, index }) => <SessionRow session={item} first={index === 0}
         onPress={() => props.onOpenSession(item)} onLongPress={() => props.onLongPressSession(item)} />}
     />
-    {!!project && <NewSessionFab onPress={props.onNewSession} />}
+    </BlurTargetView>
+    {!!project && <NewSessionFab onPress={props.onNewSession} blurTarget={props.blurTarget} />}
   </View>;
 }
 

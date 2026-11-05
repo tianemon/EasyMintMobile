@@ -73,12 +73,12 @@ export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   backgroundWrap: { marginHorizontal: chatInset, marginTop: space.s1 },
   backgroundBar: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backgroundPill: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.lg, backgroundColor: colors.thinkingBody, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  backgroundPill: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.lg, backgroundColor: colors.frostedSheetFill, flexDirection: 'row', alignItems: 'center', gap: 4 },
   // Shell 胶囊用 success-soft 底 + 绿色文字（PC ShellBar 就是绿底绿字，和 Agent 胶囊区分开）
   shellPill: { backgroundColor: colors.successSoft },
   backgroundPillText: { color: colors.textSecondary, fontSize: fontSize.ui11, fontWeight: '700' },
   shellPillText: { color: colors.success },
-  backgroundPanel: { marginTop: space.s1, padding: 9, gap: 7, maxHeight: 180, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  backgroundPanel: { marginTop: space.s1, padding: 9, gap: 7, maxHeight: 180, borderRadius: radius.lg, backgroundColor: colors.frostedSheetFill, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   panelTitle: { color: colors.textMuted, fontSize: fontSize.caption, fontWeight: '600' },
   backgroundRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   shellCommandButton: { flexGrow: 1, flexShrink: 1, minWidth: 0 },

@@ -1,3 +1,7 @@
+import { useRef } from 'react';
+import { BlurTargetView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AmbientBackground } from '../components/AmbientBackground';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Header } from '../components/Header';
@@ -34,6 +38,8 @@ type HomeScreenProps = {
  * 「已连接」。点哪台进哪台的会话；其余设备的连接在后台按需建立（见 App 的 openDevice）。
  */
 export function HomeScreen(props: HomeScreenProps) {
+  const insets = useSafeAreaInsets();
+  const blurTarget = useRef<View>(null);
   const { devices, activePcId, connection, pairCode, error } = props;
   const styles = useThemedStyles(makeStyles);
   const commonStyles = useThemedStyles(makeCommonStyles);
@@ -48,6 +54,9 @@ export function HomeScreen(props: HomeScreenProps) {
   }
 
   return <View style={commonStyles.fill}>
+    <BlurTargetView ref={blurTarget} style={commonStyles.fill}>
+    {/* Match the full-window background behind the system bars, rather than restarting the gradient inside the safe area. */}
+    <AmbientBackground style={{ top: -insets.top, bottom: -insets.bottom }} />
     <Header title="设备" right={
       <PressableScale accessibilityLabel="设置" hitSlop={8} onPress={props.onOpenSettings} style={styles.headerAction}>
         <Glass variant="frosted" radius={13} style={styles.headerPill}>
@@ -90,9 +99,10 @@ export function HomeScreen(props: HomeScreenProps) {
         {!!error && <Text style={styles.error}>{error}</Text>}
       </View>}
     </ScrollView>
+    </BlurTargetView>
     {!!devices.length && <PressableScale accessibilityLabel="添加设备" onPress={props.onAddDevice} style={styles.fab}>
-      <Glass variant="frosted" radius={28} fill={colors.success} style={styles.fabGlass}>
-        <View style={styles.fabInner}><PlusIcon size={22} color={colors.textInverse} /></View>
+      <Glass variant="liquid" radius={29} blur blurTarget={blurTarget} intensity={8} sheen={false} elevated={false} fill={colors.liquidClearFill} style={styles.fabGlass}>
+        <View style={styles.fabInner}><PlusIcon size={22} color={colors.floatingActionIcon} /></View>
       </Glass>
     </PressableScale>}
   </View>;
@@ -126,7 +136,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   error: { fontSize: fontSize.sm, color: colors.danger, textAlign: 'center' },
   codeHint: { fontSize: fontSize.base, color: colors.textSecondary },
   code: { fontSize: fontSize.display, fontWeight: '800', letterSpacing: 7, color: colors.accent },
-  fab: { position: 'absolute', right: 20, bottom: 22, width: 58, height: 58 },
+  fab: { position: 'absolute', right: 28, bottom: 34, width: 58, height: 58 },
   fabGlass: { width: 58, height: 58 },
   fabInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
  * iOS 打包/安装两个脚本（install-ios.mjs / build-ipa.mjs）的公共部分：
  * 生成原生工程、装 Pods、取签名 Team 与目标设备。
  *
- * ⚠️ 必须在**你自己的终端**里跑：Xcode 构建过程中 expo 的 ExpoModulesJSI 构建阶段会再起一个
- * xcodebuild、Swift 宏也会另起 ExpoModulesMacros-tool 进程，两者都要申请 sandbox，
- * 而 AI 助手那侧的 shell 被宿主套了沙盒（sandbox_apply: Operation not permitted），必失败。
+ * 严格沙盒宿主可能限制 ExpoModulesJSI 的嵌套 xcodebuild 或 Swift 宏进程，
+ * 报 sandbox_apply: Operation not permitted 时，应检查实际构建权限。
+ * 不受该限制的环境可以直接构建；2026-11-06 已完成自动构建、签名和真机安装。
  */
 
 export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -63,12 +63,22 @@ export function ensurePrebuild() {
 export function ensurePods() {
   const lock = join(iosDir, 'Podfile.lock');
   const manifest = join(iosDir, 'Pods', 'Manifest.lock');
-  const same = existsSync(lock) && existsSync(manifest) && readFileSync(lock, 'utf8') === readFileSync(manifest, 'utf8');
+  // Equal Pod locks do not detect a newly installed native npm dependency.
+  const marker = join(iosDir, '.pods-inputs');
+  const hash = createHash('sha256');
+  for (const file of ['package.json', 'package-lock.json', 'ios/Podfile', 'ios/Podfile.properties.json']) {
+    const input = join(projectRoot, file);
+    if (existsSync(input)) hash.update(file).update(readFileSync(input));
+  }
+  const inputs = hash.digest('hex');
+  const same = existsSync(lock) && existsSync(manifest) && readFileSync(lock, 'utf8') === readFileSync(manifest, 'utf8')
+    && existsSync(marker) && readFileSync(marker, 'utf8').trim() === inputs;
   if (same) {
     console.log('Pods 与 Podfile.lock 一致，跳过 pod install');
     return;
   }
   run('pod', ['install'], iosDir);
+  writeFileSync(marker, inputs);
 }
 
 /**

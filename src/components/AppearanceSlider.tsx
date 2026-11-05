@@ -21,8 +21,8 @@ const HEIGHT = 54;
 /**
  * 外观切换：三段式滑动选择器。
  *
- * 形状参考桌面端液态玻璃模板里的浮动导航栏（`.ios-tabbar` + `.ios-tab-selection`）：
- * 轨道是一块玻璃，选中块是**嵌在里面的另一块玻璃**，位移带一点回弹
+ * 轨道和选中块统一使用磨砂表面，保留原来的滑动交互：
+ * 轨道内的选中块，位移带一点回弹
  * （模板是 `cubic-bezier(.18,1.35,.32,1)`，这里用 spring 近似）。
  *
  * 交互：
@@ -95,13 +95,13 @@ export function AppearanceSlider() {
   });
 
   return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} {...responder.panHandlers}>
-    <Glass variant="liquid" radius={HEIGHT / 2} elevated={false} style={styles.track}>
+    <Glass variant="frosted" radius={HEIGHT / 2} elevated={false} style={styles.track}>
       <View style={styles.trackInner}>
         <BlurTargetView ref={trackTarget} pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.ambientBase }]}>
           <AmbientBackground />
         </BlurTargetView>
         {width > 0 && <Animated.View style={[styles.thumb, { width: Math.max(0, scale), transform: [{ translateX }] }]}>
-          <Glass variant="liquid" radius={(HEIGHT - PADDING * 2) / 2} blur blurTarget={trackTarget} intensity={14} fill={colors.liquidClearFill} elevated={false} topSheen style={styles.thumbFill} />
+          <Glass variant="frosted" radius={(HEIGHT - PADDING * 2) / 2} blur blurTarget={trackTarget} intensity={46} fill={colors.frostedSelection} elevated={false} style={styles.thumbFill} />
         </Animated.View>}
         <View style={styles.items}>
           {ITEMS.map((item) => {

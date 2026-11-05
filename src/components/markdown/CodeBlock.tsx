@@ -53,9 +53,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   block: {
     marginVertical: space.s2,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: colors.chatDivider,
     borderRadius: radius.lg,
-    backgroundColor: colors.codeBlockBg,
+    backgroundColor: colors.chatCode,
     overflow: 'hidden',
   },
   /** 整条消息以代码块结尾时去掉下边距（与桌面端最后子元素不收尾边距同口径） */
@@ -67,15 +67,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: space.s3,
     paddingVertical: space.s1,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.codeBlockHeader,
+    borderBottomColor: colors.chatDivider,
+    backgroundColor: colors.chatInset,
   },
   language: { color: colors.textMuted, fontSize: fontSize.caption, letterSpacing: 0.5 },
   copy: { color: colors.textSecondary, fontSize: fontSize.caption },
   // alignSelf: stretch 显式声明横向拉满父宽度（列容器默认行为）——代码再长也不靠自身内容宽把气泡撑宽，只在自己块内滚。
   // flexGrow: 0 / flexShrink: 0：RN 的 ScrollView 默认 flexGrow: 1（baseHorizontal），
   // 嵌在行/气泡里会被当成弹性项伸展成空白容器，这里必须显式管住（同 ThinkingBlock）。
-  scroll: { flexGrow: 0, flexShrink: 0, alignSelf: 'stretch', backgroundColor: colors.codeBlockBg },
+  scroll: { flexGrow: 0, flexShrink: 0, alignSelf: 'stretch', backgroundColor: 'transparent' },
   scrollContent: { paddingHorizontal: space.s3, paddingVertical: space.s2 },
   code: { color: colors.textPrimary, fontFamily: monoFont, fontSize: fontSize.code, lineHeight: 17 },
 });
