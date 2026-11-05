@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, BackHandler, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { AmbientBackground } from './src/components/AmbientBackground';
 import { LoadingView } from './src/components/LoadingView';
 import type { ComposerProps } from './src/components/Composer';
 import { parsePairingUri } from './src/connection/pairing-uri';
@@ -358,7 +359,7 @@ function AppContent() {
     permission, permissionLabel, running, session, thinking, thinkingOptions]);
 
   if (!bootReady || !themeReady) return null;
-  if (page === 'scanner') return <SafeAreaProvider><ScannerScreen onCancel={goBack} onScanned={(data) => void handleScan(data)} /></SafeAreaProvider>;
+  if (page === 'scanner') return <SafeAreaProvider><AmbientBackground /><ScannerScreen onCancel={goBack} onScanned={(data) => void handleScan(data)} /></SafeAreaProvider>;
 
   let content: ReactNode;
   if (busy) content = <LoadingView spinner title="正在加载 EasyMint" />;
@@ -385,7 +386,7 @@ function AppContent() {
     running={running} mintStatus={mintStatus} mintIcon={mintIcon} composer={composer} onBack={goBack} />;
 
   // 状态栏图标明暗跟主题走：深色主题上用浅色图标（PC 亦然）
-  return <SafeAreaProvider><SafeAreaView style={commonStyles.safe} edges={['top', 'bottom']}><StatusBar style={effectiveMode === 'dark' ? 'light' : 'dark'} />{content}
+  return <SafeAreaProvider><AmbientBackground /><SafeAreaView style={commonStyles.safe} edges={page === 'chat' ? ['bottom', 'left', 'right'] : ['top', 'bottom']}><StatusBar style={effectiveMode === 'dark' ? 'light' : 'dark'} />{content}
     <SessionMenuModal visible={settingsOpen} session={menuSession} renameTitle={renameTitle}
       onRenameTitleChange={setRenameTitle}
       onDismiss={() => { setSettingsOpen(false); setMenuSession(null); }}

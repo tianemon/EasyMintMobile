@@ -24,7 +24,7 @@ export function LoadingView({ title, subtitle, spinner = false, action }: {
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  loadingTransition: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 11, backgroundColor: colors.content },
+  loadingTransition: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 11, backgroundColor: 'transparent' },
   loadingMark: { width: 62, height: 62, alignItems: 'center', justifyContent: 'center' },
   loadingOrbit: { position: 'absolute', width: 54, height: 54, borderRadius: radius.full, borderWidth: 2, borderColor: colors.borderLight, borderRightColor: colors.accent, transform: [{ rotate: '25deg' }] },
   loadingCore: { width: space.s3, height: space.s3, borderRadius: radius.full, backgroundColor: colors.accent },

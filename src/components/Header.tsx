@@ -5,6 +5,9 @@ import { chatInset, fontSize, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import { ChevronIcon, iconSize } from './icons';
 
+/** 标题栏高度。导出是因为聊天页的模糊目标要按它反推环境层的纵向偏移（见 ChatScreen） */
+export const HEADER_HEIGHT = 54;
+
 type HeaderProps = {
   title: ReactNode;
   onBack?: () => void;
@@ -30,7 +33,7 @@ export function Header({ title, onBack, right }: HeaderProps) {
 /** 标题栏样式：同时供页面自定义右侧操作（如首页「设置」）复用，保证与 Header 同一套值。
  *  取用方式：`const headerStyles = useThemedStyles(makeHeaderStyles)` */
 export const makeHeaderStyles = (colors: ThemeColors) => StyleSheet.create({
-  header: { height: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.divider, paddingHorizontal: chatInset, backgroundColor: colors.content },
+  header: { height: HEADER_HEIGHT, flexDirection: 'row', alignItems: 'center', paddingHorizontal: chatInset, backgroundColor: 'transparent' },
   headerSide: { width: 88 },
   headerBack: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   headerRight: { alignItems: 'flex-end' },

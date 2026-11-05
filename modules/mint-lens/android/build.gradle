@@ -1,0 +1,10 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+group = 'em.lens'
+version = '1.0.0'
+android {
+  namespace 'em.lens'
+  defaultConfig { versionName '1.0.0' }
+}

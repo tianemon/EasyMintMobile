@@ -76,6 +76,25 @@ export const lightColors = {
   askBg: '#fff5d8',
   askText: '#4f4221',
   inputBorder: '#d8dcd4',
+  /** 环境层：玻璃要透出「有东西」的背景，纯色底会让材质退化成半透明块 */
+  ambientBase: '#edf2ec',
+  ambientGreen: '#cfe8d8',
+  ambientBlue: '#dbe6f8',
+  ambientCool: '#dce9f5',
+  /** 玻璃层：liquid 更透、frosted 更实；rim/sheen 是 1px 光学边框与左上高光 */
+  glassFill: 'rgba(255,255,255,0.28)',
+  /** 液态玻璃底色：照模板 --ios-glass-fill(#e4eaf252) 取冷调，不用纯白——纯白在亮底上就是一块白板 */
+  liquidFill: 'rgba(228,234,242,0.20)',
+  liquidClearFill: 'rgba(0,0,0,0.045)',
+  glassFillStrong: 'rgba(255,255,255,0.66)',
+  glassRim: 'rgba(255,255,255,0.78)',
+  glassSheen: 'rgba(255,255,255,0.40)',
+  glassShadow: 'rgba(14,38,26,0.20)',
+  /** 玻璃上的按压层：薄白光，避免灰底把玻璃压脏 */
+  glassPress: 'rgba(255,255,255,0.50)',
+  /** 外观分段滑块的轨道与滑块（桌面端无此组件；结构取自 EasyEdit，色值按本app中性灰校准） */
+  segmentBg: '#ededeb',
+  segmentThumb: '#ffffff',
   sheetBg: '#f9faf6', // 会话操作底部弹层
   sheetText: '#28322b',
   overlay: 'rgba(24,31,25,0.38)', // 弹层遮罩
@@ -161,6 +180,24 @@ export const darkColors: ThemeColors = {
   askBg: '#2a2415', // 提问卡底：亮色暖黄 #fff5d8 → 暖黄暗调
   askText: '#e3d6b4', // 提问卡文字：亮色 #4f4221 → 暖白，与暖底配套
   inputBorder: '#3a403a', // 输入框描边：亮色 #d8dcd4 → 比 border(#414141) 略柔和
+  ambientBase: '#0b1310',
+  // 深色下环境层必须真的「有颜色」：原来这几档太暗，整屏采样只有 ~(20,30,30)，
+  // 玻璃采到的是一片黑，材质再精细也看不出来（实测截图见 .workbuddy/memory）
+  ambientGreen: '#17553d',
+  ambientBlue: '#1b3557',
+  ambientCool: '#19334b',
+  glassFill: 'rgba(255,255,255,0.10)',
+  liquidFill: 'rgba(255,255,255,0.04)',
+  liquidClearFill: 'rgba(0,0,0,0.035)',
+  // 深色玻璃用「薄白」而不是「深灰」：深灰叠加在暗背景上会把面板压成一块黑板，
+  // 实测面板内外只差 10 个灰阶，完全没有材质感
+  glassFillStrong: 'rgba(255,255,255,0.06)',
+  glassRim: 'rgba(255,255,255,0.22)',
+  glassSheen: 'rgba(255,255,255,0.22)',
+  glassShadow: 'rgba(0,0,0,0.55)',
+  glassPress: 'rgba(255,255,255,0.07)',
+  segmentBg: '#1f1f1f',
+  segmentThumb: '#333333',
   sheetBg: '#1c1c1c', // 会话操作弹层：与 elevated 同档（弹层靠描边+阴影分层）
   sheetText: '#d4d4d4', // 弹层标题文字：与 textPrimary 同值
   overlay: 'rgba(0,0,0,0.6)', // 遮罩：亮色是浅绿灰半透明，深色改为纯黑加压

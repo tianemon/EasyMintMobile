@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import type { RefObject } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { ModelCapabilities, PermissionMode } from '../protocol/types';
@@ -9,12 +10,15 @@ import type { ThemeColors } from '../theme/tokens';
 import { chatInset, fontSize, radius, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { ComposerControl } from '../types';
+import { Glass } from './Glass';
 import { AttachmentKindIcon, ComposerIcon, Icon, SendIcon, SpinIcon, iconSize } from './icons';
 
 export type ModelProvider = ModelCapabilities['providers'][number];
 
 export type ComposerProps = {
   draft: string;
+  /** Android 模糊目标（消息区）；由 ChatScreen 传入，不参与业务 */
+  blurTarget?: RefObject<View | null>;
   running: boolean;
   /** 上下文整理中：桌面端此时蒙住输入卡片并禁用输入/发送（ChatInput.tsx:421-441） */
   compacting: boolean;
@@ -90,7 +94,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   // 压缩期间与桌面端 inputDisabled 同款：既不显示打断键，也不允许发送
   const showStop = !compacting && running && hasSession && !hasContent;
   const sendDisabled = compacting || (!showStop && !hasContent);
-  return <View style={[styles.composerCard, shadow.sm]}>
+  return <View style={styles.composerCard}>
+    {/* 全 App 唯一一块液态玻璃：消息在卡片背后滚动，折射与模糊都真实发生在这块表面上 */}
+    <Glass variant="liquid" blur radius={24} intensity={8} sheen={false} blurTarget={props.blurTarget} elevated={false} fill={colors.liquidClearFill} style={styles.composerGlass} />
     {!!attachments.length && <View style={styles.attachmentPreview}>{attachments.map((attachment) => <View key={attachment.id} style={styles.attachmentItem}>
       {attachment.kind === 'image'
         ? <Image source={{ uri: `data:${attachment.mimeType};base64,${attachment.data}` }} style={styles.attachmentImage} resizeMode="contain" />
@@ -177,8 +183,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // 左右与消息列/状态行/提问卡同一条线（chatInset）；上边距 0——桌面端 .input-card 也没有上边距，
   // 与上方内容的呼吸由状态行的 26px 提供，加了反而会在「有状态/无状态」两种情况下跳动
-  composerCard: { marginHorizontal: chatInset, marginTop: 0, marginBottom: 26, padding: space.s1, borderRadius: radius.lg, backgroundColor: colors.elevated },
-  compactMask: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: radius.lg, backgroundColor: colors.elevated, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
+  composerCard: { marginHorizontal: chatInset, marginTop: 0, marginBottom: 26, padding: space.s1, borderRadius: 24 },
+  composerGlass: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  compactMask: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: 24, backgroundColor: colors.glassFillStrong, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
   compactMaskText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '500' },
   composerInput: { minHeight: 52, maxHeight: 130, paddingHorizontal: space.s3, paddingTop: 10, paddingBottom: 6, color: colors.textPrimary, fontSize: fontSize.base, lineHeight: 22, textAlignVertical: 'top' },
   composerToolbar: { minHeight: 38, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 5 },

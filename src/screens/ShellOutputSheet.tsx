@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { AmbientBackground } from '../components/AmbientBackground';
 import { AnsiText } from '../components/AnsiText';
 import { Header } from '../components/Header';
 import { ChevronIcon, iconSize } from '../components/icons';
@@ -98,6 +99,8 @@ export function ShellOutputSheet(props: ShellOutputSheetProps) {
 
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={props.onClose}>
     <SafeAreaProvider><SafeAreaView style={commonStyles.safe} edges={['top', 'bottom']}>
+      {/* Modal 是独立窗口，根环境层不在里面：这里自己铺一份，否则透明底会露出窗口白底 */}
+      <AmbientBackground />
       <Header title={shell?.command ?? '命令输出'} onBack={props.onClose} right={shell && running
         ? <Pressable accessibilityLabel="停止命令" onPress={() => props.onStop(shell.id)} style={styles.stopButton}>
           <Text style={styles.stopText}>停止</Text>

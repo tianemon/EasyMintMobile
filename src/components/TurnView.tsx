@@ -73,20 +73,22 @@ export const TurnRow = memo(function TurnRow({ turn, onInnerScrollGesture }: Tur
 
     {mode === 'running' && turn.pieces.map((piece) => piece.kind === 'process'
       ? <ProcessSummary key={piece.key} piece={piece} turn={turn} onInnerScrollGesture={onInnerScrollGesture} />
-      : <View key={piece.key} style={[styles.bubble, styles.agentBubble]}>
+      : <View key={piece.key} style={styles.agentBlock}>
         <MarkdownView text={piece.text} fadeTail={piece.tail} />
       </View>)}
 
     {/* 摊开态：工具卡直接可见，不再每项一条折叠行（被打断时用户要看的就是发生了什么） */}
     {mode === 'flat' && turn.pieces.map((piece) => piece.kind === 'process'
       ? <View key={piece.key}>{renderItems(piece.items, styles, onInnerScrollGesture, false)}</View>
-      : <View key={piece.key} style={[styles.bubble, styles.agentBubble]}>
+      : <View key={piece.key} style={styles.agentBlock}>
         <MarkdownView text={piece.text} />
       </View>)}
 
-    {turn.conclusion.map((item) => <View key={item.key} style={[styles.bubble, styles.agentBubble]}>
-      <MarkdownView text={item.text} />
-    </View>)}
+    {turn.conclusion.length > 0 && <View style={styles.conclusion}>
+      {turn.conclusion.map((item) => <View key={item.key} style={styles.agentBlock}>
+        <MarkdownView text={item.text} />
+      </View>)}
+    </View>}
 
     {!!turn.usage && <Text style={styles.meta}>{formatUsage(turn.usage)}</Text>}
   </View>;
@@ -186,6 +188,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   detailScroll: { flexGrow: 0, flexShrink: 0, maxHeight: DETAIL_MAX_HEIGHT },
   thinkingText: { color: colors.textSecondary, fontFamily: monoFont, fontSize: fontSize.detail, lineHeight: fontSize.detail * 1.625, marginBottom: 4 },
   bubble: { flexGrow: 0, flexShrink: 0, maxWidth: '88%', padding: 13, borderRadius: radius.lg, marginBottom: space.s2 },
-  agentBubble: { alignSelf: 'flex-start', backgroundColor: colors.cardAgent },
+  // Mint 正文不套气泡（桌面端 msg-conclusion 同样是透明无底），靠一条横线与上文分开
+  agentBlock: { alignSelf: 'stretch', marginBottom: space.s2 },
+  conclusion: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider, paddingTop: 12, marginTop: 4 },
   meta: { color: colors.textMuted, fontSize: fontSize.caption, marginTop: 2, marginBottom: 4 },
 });

@@ -403,3 +403,48 @@ export function NewChatIcon() {
   const { colors } = useTheme();
   return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"><Path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" stroke={colors.textInverse} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /><Path d="M8 12h8M12 8v8" stroke={colors.textInverse} strokeWidth={1.8} strokeLinecap="round" /></Svg>;
 }
+
+// ── 界面级图标：设置齿轮 / 归档时钟 / 外观三档 ────────────────────────────
+// 形状取自桌面端同款（齿轮是 Lucide settings，归档是 SessionBar 的时钟，外观三档对 EasyEdit 的
+// `_ThemeSlider`）：描边风格与其它图标一致，尺寸由调用方给。
+
+const GEAR: ReactNode = <>
+  <Circle cx="12" cy="12" r="3.1" />
+  <Path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9v.01a1.7 1.7 0 0 0 1.56 1.02H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.02z" />
+</>;
+const CLOCK: ReactNode = <><Circle cx="12" cy="12" r="9" /><Path d="M12 7.2V12l3.4 2" /></>;
+const SUN: ReactNode = <>
+  <Circle cx="12" cy="12" r="4.2" />
+  <Path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4 7 7M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6" />
+</>;
+const MOON: ReactNode = <Path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z" />;
+
+/** 设置齿轮（一级首页右上角） */
+export function GearIcon({ size = 18, color }: { size?: number; color?: string }) {
+  const { colors } = useTheme();
+  return <Glyph size={size} color={color ?? colors.textMuted} strokeWidth={1.6}>{GEAR}</Glyph>;
+}
+
+/** 归档入口（会话列表右上角，与桌面端 SessionBar 的时钟同形） */
+export function ClockIcon({ size = 18, color }: { size?: number; color?: string }) {
+  const { colors } = useTheme();
+  return <Glyph size={size} color={color ?? colors.textMuted} strokeWidth={1.6}>{CLOCK}</Glyph>;
+}
+
+/** 外观三档：浅色 / 深色 / 自动（半圆填充是「自动」的标准写法） */
+export function AppearanceIcon({ mode, size = 17, color }: { mode: 'light' | 'dark' | 'auto'; size?: number; color?: string }) {
+  const { colors } = useTheme();
+  const stroke = color ?? colors.textMuted;
+  if (mode === 'light') return <Glyph size={size} color={stroke} strokeWidth={1.7}>{SUN}</Glyph>;
+  if (mode === 'dark') return <Glyph size={size} color={stroke} strokeWidth={1.7}>{MOON}</Glyph>;
+  return <Glyph size={size} color={stroke} strokeWidth={1.7}>
+    <Circle cx="12" cy="12" r="8.6" />
+    <Path d="M12 3.4a8.6 8.6 0 0 0 0 17.2z" fill={stroke} stroke="none" />
+  </Glyph>;
+}
+
+/** 加号（设备页的「添加设备」悬浮按钮；与 NewChatIcon 分开：这里不需要气泡底） */
+export function PlusIcon({ size = 22, color }: { size?: number; color?: string }) {
+  const { colors } = useTheme();
+  return <Glyph size={size} color={color ?? colors.textInverse} strokeWidth={2}>{<Path d="M12 5v14M5 12h14" />}</Glyph>;
+}

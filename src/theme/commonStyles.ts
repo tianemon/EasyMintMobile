@@ -9,7 +9,8 @@ import { fontSize, radius, space } from './tokens';
  * 是工厂而非常量：取色必须走 `useThemedStyles(makeCommonStyles)`，否则切主题不生效。
  */
 export const makeCommonStyles = (colors: ThemeColors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.content },
+  // 透明：整页底色由 AmbientBackground 提供，盖掉它玻璃就没有可透的东西
+  safe: { flex: 1, backgroundColor: 'transparent' },
   fill: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.s6, gap: space.s4 },
   card: {

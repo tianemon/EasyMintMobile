@@ -1,5 +1,6 @@
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from '../components/Button';
+import { Glass } from '../components/Glass';
 import type { SessionListItem } from '../protocol/types';
 import { makeCommonStyles } from '../theme/commonStyles';
 import type { ThemeColors } from '../theme/tokens';
@@ -28,21 +29,27 @@ export function SessionMenuModal(props: SessionMenuModalProps) {
   const commonStyles = useThemedStyles(makeCommonStyles);
   return <Modal transparent visible={props.visible} animationType="fade" onRequestClose={props.onRequestClose}>
     <View style={styles.menuOverlay}><Pressable style={StyleSheet.absoluteFill} onPress={props.onDismiss} />
-      <View style={styles.messageMenu}>
+      <Glass variant="frosted" radius={20} fill={colors.sheetBg} style={styles.messageMenu} contentStyle={styles.menuContent}>
         <Text style={styles.messageMenuTitle}>会话操作</Text>
         {!!session && <>
-          <TextInput style={commonStyles.answerInput} value={renameTitle} onChangeText={props.onRenameTitleChange} placeholder="会话标题" placeholderTextColor={colors.textMuted} />
+          <TextInput style={styles.input} value={renameTitle} onChangeText={props.onRenameTitleChange} placeholder="会话标题" placeholderTextColor={colors.textMuted} />
           <Button label="保存标题" secondary disabled={!renameTitle.trim() || renameTitle.trim() === session.title} onPress={props.onRename} />
           <Button label={session.pinnedAt ? '取消置顶' : '置顶会话'} secondary onPress={props.onTogglePin} />
           <Button label={session.archivedAt ? '恢复会话' : '归档会话'} danger={!session.archivedAt} secondary={!!session.archivedAt} onPress={props.onToggleArchive} />
         </>}
-      </View>
+      </Glass>
     </View>
   </Modal>;
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   menuOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
-  messageMenu: { padding: 18, gap: 10, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, backgroundColor: colors.sheetBg },
+  messageMenu: { marginHorizontal: 10, marginBottom: 14 },
+  menuContent: { padding: 18, gap: 10 },
+  input: {
+    minHeight: 46, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: colors.inputField, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.borderLight,
+    color: colors.textPrimary, fontSize: fontSize.body,
+  },
   messageMenuTitle: { color: colors.sheetText, fontSize: fontSize.title, fontWeight: '700', marginBottom: 2 },
 });

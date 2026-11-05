@@ -8,6 +8,7 @@
     "@noble/hashes": "^2.4.0",
     "base64-js": "^1.5.1",
     "expo": "~57.0.23",
+    "expo-blur": "~57.0.3",
     "expo-build-properties": "~57.0.18",
     "expo-camera": "~57.0.5",
     "expo-crypto": "~57.0.3",

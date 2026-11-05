@@ -107,6 +107,15 @@ type MessageListProps = {
    */
   statusText?: string;
   statusIcon?: string;
+  /**
+   * 底部浮层（输入卡 + 状态条）占掉的高度。
+   *
+   * 消息列表要**铺到屏幕底部、被输入卡压住**，玻璃才有内容可透——这是列表面板做不到的。
+   * 倒置列表的 contentContainer 会被整体翻转，所以这里给的是 paddingTop（视觉落在底部），
+   * 让最后一条消息能滚到输入卡上方，而不是被永久遮住。
+   */
+  bottomInset?: number;
+  topInset?: number;
 };
 
 /** 稳定 renderItem / keyExtractor：store 每次事件都产生新数组，内联函数会让 FlatList 对全部行重新求值 */
@@ -129,7 +138,7 @@ const maintainVisibleContentPosition = { minIndexForVisible: 0, autoscrollToTopT
  * maintainVisibleContentPosition 显式开启：用户停在最新消息附近时跟随流式增长；上翻历史后
  * 不会被新内容拉回。它不是 VirtualizedList 的默认行为，不能删掉后依赖隐式锚定。
  */
-export const MessageList = memo(function MessageList({ messages, running, tail, askId, statusText, statusIcon }: MessageListProps) {
+export const MessageList = memo(function MessageList({ messages, running, tail, askId, statusText, statusIcon, bottomInset = 0, topInset = 0 }: MessageListProps) {
   const styles = useThemedStyles(makeStyles);
   const rows = useMemo(() => buildRows(messages, running, describeProcessItem), [messages, running]);
   // 尾部状态行只在「没有正在跑的过程」时出现：有过程就跟桌面端一样由回合行承担（避免同屏两条状态）
@@ -161,7 +170,7 @@ export const MessageList = memo(function MessageList({ messages, running, tail, 
       renderItem={renderRow}
       keyExtractor={keyExtractor}
       style={styles.wrap}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: topInset + space.s2 }, bottomInset > 0 && { paddingTop: bottomInset + 12 }]}
       inverted
       scrollEnabled={!innerScrollGesture}
       maintainVisibleContentPosition={maintainVisibleContentPosition}
