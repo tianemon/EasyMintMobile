@@ -236,11 +236,13 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         return;
       }
       if (event.channel === 'agent:context-summarizing') {
-        // type: 'compact' = 开始压缩，'done' = 结束；只走状态栏，不进消息流（PC 同口径）。
+        // type: 'compact' = 开始压缩，'done' = 结束；状态栏 + 输入卡片的蒙版都跟着走（PC 同口径）。
         // 结束时要按运行态回落：回合还在跑就回「正在处理...」，否则清空——
         // 直接置空会把状态栏抹掉，用户会以为已经停了（桌面端是 pop 信号后回落到次新信号）。
-        store.setMintStatus(sessionId, data.type === 'done'
-          ? resolveStatusHint(activeTurn.current[sessionId] ?? false, '') : COMPACTING_HINT);
+        const compacting = data.type !== 'done';
+        store.patchRuntime(sessionId, { compacting });
+        store.setMintStatus(sessionId, compacting
+          ? COMPACTING_HINT : resolveStatusHint(activeTurn.current[sessionId] ?? false, ''));
         return;
       }
       // chat-session / chat-closed 是桌面端 Pi 内部 chat 的生命周期（chatId / tabId），
@@ -270,6 +272,11 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       frames.flush();
       // 状态类帧（压缩 / 重试 / 等待输入）：只改状态栏。compacted 不在其中——它带摘要正文，
       // 由下面的 streamSystemNotice 落成系统消息；返回 null 的帧一律继续往下走，不吞业务帧。
+      // 压缩的开始/结束还要切换**输入卡片**的蒙版（桌面端 inputDisabled = compacting）：
+      // 这一段不走流式正文，光靠状态栏文案不够——输入框仍可打字发送，等 PC 拒绝才知道不行。
+      if (type === 'compacting' || type === 'compaction_finished') {
+        store.patchRuntime(sessionId, { compacting: type === 'compacting' });
+      }
       const hint = streamStatusHint(String(type), data);
       if (hint !== null) {
         store.setMintStatus(sessionId, resolveStatusHint(activeTurn.current[sessionId] ?? false, hint));

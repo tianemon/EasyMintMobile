@@ -124,7 +124,7 @@ function AppContent() {
   const activeSessionId = session?.sessionId ?? DRAFT_SESSION_ID;
   const active = runtime[activeSessionId] ?? EMPTY_RUNTIME;
   const {
-    messages, running, mintStatus, mintIcon, pendingAsk, backgroundShells, backgroundAgents,
+    messages, running, mintStatus, mintIcon, compacting, pendingAsk, backgroundShells, backgroundAgents,
     contextUsage, permission, thinking, thinkingOptions, model,
   } = active;
 
@@ -217,6 +217,9 @@ function AppContent() {
       // snapshotMessages 已按列表顺序返回（最新在前）
       messages: recovered.messages,
       running: isRunning,
+      // 快照的 status 只有 running/idle，分不出「正在压缩」。这里一律重置为未压缩：
+      // 误判成未压缩只是发出去被 PC 拒（有归类好的错误卡），误判成压缩中会把输入卡死。
+      compacting: false,
       permission: snapshot.cache?.permissionMode ?? 'standard',
       // 会话真实生效等级优先于缓存：PC 同一会话也是以 session.thinkingLevel 为准（缓存只是上次的期望值，
       // 可能被模型能力裁剪），取不到再回落缓存、再回落 medium
@@ -344,11 +347,11 @@ function AppContent() {
   }), [actions.send, actions.stop, actions.setRemoteSetting, attachments, fail]);
 
   const composer: ComposerProps = useMemo(() => ({
-    draft, attachments, running, hasSession: !!session, permission, permissionLabel, thinking, thinkingOptions, model,
+    draft, attachments, running, compacting, hasSession: !!session, permission, permissionLabel, thinking, thinkingOptions, model,
     provider: activeModelProvider, contextPercent: contextUsage.percent, contextWindow: contextUsage.maxTokens ?? null, control: composerControl,
     ...composerHandlers,
-  }), [activeModelProvider, attachments, composerControl, composerHandlers, contextUsage.maxTokens, contextUsage.percent, draft, model, permission,
-    permissionLabel, running, session, thinking, thinkingOptions]);
+  }), [activeModelProvider, attachments, compacting, composerControl, composerHandlers, contextUsage.maxTokens, contextUsage.percent, draft, model,
+    permission, permissionLabel, running, session, thinking, thinkingOptions]);
 
   if (!bootReady || !themeReady) return null;
   if (page === 'scanner') return <SafeAreaProvider><ScannerScreen onCancel={goBack} onScanned={(data) => void handleScan(data)} /></SafeAreaProvider>;

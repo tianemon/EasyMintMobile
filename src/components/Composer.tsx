@@ -9,13 +9,15 @@ import type { ThemeColors } from '../theme/tokens';
 import { fontSize, radius, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { ComposerControl } from '../types';
-import { AttachmentKindIcon, ComposerIcon, Icon, SendIcon, iconSize } from './icons';
+import { AttachmentKindIcon, ComposerIcon, Icon, SendIcon, SpinIcon, iconSize } from './icons';
 
 export type ModelProvider = ModelCapabilities['providers'][number];
 
 export type ComposerProps = {
   draft: string;
   running: boolean;
+  /** 上下文整理中：桌面端此时蒙住输入卡片并禁用输入/发送（ChatInput.tsx:421-441） */
+  compacting: boolean;
   /** 是否已绑定会话（决定发送键是「发送」还是「中止」） */
   hasSession: boolean;
   permission: PermissionMode;
@@ -75,7 +77,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const { colors, shadow } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const commonStyles = useThemedStyles(makeCommonStyles);
-  const { draft, running, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, contextWindow, control, attachments } = props;
+  const { draft, running, compacting, hasSession, permission, permissionLabel, thinking, thinkingOptions, model, provider, contextPercent, contextWindow, control, attachments } = props;
   const [showContextTip, setShowContextTip] = useState(false);
   const contextTipText = contextTip(contextPercent, contextWindow);
   /** 有内容可发（正文或附件） */
@@ -85,8 +87,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    * 只有「忙碌且输入为空」才让位给打断键。早先手机端 busy 时无论有没有输入都显示打断，
    * 导致想插话只能先停掉任务。
    */
-  const showStop = running && hasSession && !hasContent;
-  const sendDisabled = !showStop && !hasContent;
+  // 压缩期间与桌面端 inputDisabled 同款：既不显示打断键，也不允许发送
+  const showStop = !compacting && running && hasSession && !hasContent;
+  const sendDisabled = compacting || (!showStop && !hasContent);
   return <View style={[styles.composerCard, shadow.sm]}>
     {!!attachments.length && <View style={styles.attachmentPreview}>{attachments.map((attachment) => <View key={attachment.id} style={styles.attachmentItem}>
       {attachment.kind === 'image'
@@ -97,7 +100,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       </Pressable>
     </View>)}</View>}
     {/* 占位色必须显式给：Android 主题是 DayNight，系统深色下原生 hint 色接近白，白底卡片上会看不见 */}
-    <TextInput value={draft} onChangeText={props.onDraftChange} placeholder={running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'} placeholderTextColor={colors.textMuted} multiline style={styles.composerInput} />
+    {/* 占位文案与桌面端同序：压缩中 > 运行中 > 空闲（ChatInput.tsx:438） */}
+    <TextInput value={draft} onChangeText={props.onDraftChange} editable={!compacting}
+      placeholder={compacting ? '正在整理上下文，请稍候' : running ? '输入以引导当前任务…' : '给 EasyMint 发送消息…'}
+      placeholderTextColor={colors.textMuted} multiline style={styles.composerInput} />
     <View style={styles.composerToolbar}>
       {/* 回形针：与模型/权限/思考共用 control 槽位，展开互斥（打开附件菜单会收起另三个） */}
       <Pressable accessibilityLabel="添加附件" accessibilityState={{ expanded: control === 'attachment' }}
@@ -158,11 +164,20 @@ export const Composer = memo(function Composer(props: ComposerProps) {
         <Text style={styles.composerOptionText}>{THINKING_LABELS[item] ?? item}</Text>{thinking === item && <Icon name="check" size={iconSize.nav} color={colors.accent} />}
       </Pressable>)}
     </View>}
+    {/* 压缩蒙版：与桌面端同款（ChatInput.tsx:421-431）——整卡盖住 + 转圈 + 一句话。
+        放在最后一个子元素：绝对定位的绘制顺序按兄弟先后，放中间会被下面展开的菜单盖住。
+        输入此刻是禁用的（editable={!compacting}），蒙版把「为什么打不了字」说清楚 */}
+    {compacting && <View style={styles.compactMask}>
+      <SpinIcon size={iconSize.card} color={colors.accent} />
+      <Text style={styles.compactMaskText}>正在整理上下文，请稍候…</Text>
+    </View>}
   </View>;
 });
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   composerCard: { margin: space.s4, marginTop: 6, marginBottom: 26, padding: space.s1, borderRadius: radius.lg, backgroundColor: colors.elevated },
+  compactMask: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: radius.lg, backgroundColor: colors.elevated, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
+  compactMaskText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '500' },
   composerInput: { minHeight: 52, maxHeight: 130, paddingHorizontal: space.s3, paddingTop: 10, paddingBottom: 6, color: colors.textPrimary, fontSize: fontSize.base, lineHeight: 22, textAlignVertical: 'top' },
   composerToolbar: { minHeight: 38, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   toolbarSpacer: { flex: 1 },

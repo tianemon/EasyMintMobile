@@ -22,6 +22,11 @@ export type SessionRuntime = {
   mintStatus: string;
   /** 状态行图标（工具进行中显示该工具的图标，空 = 用 Mint 的模型图标，桌面端 StatusBar 同款） */
   mintIcon: string;
+  /**
+   * 上下文整理中：桌面端此时会蒙住输入卡片并禁用发送（ChatInput.tsx:421-441，inputDisabled）。
+   * 手机端同款——否则用户能在压缩期间照常打字发送，等 PC 拒绝才知道不行。
+   */
+  compacting: boolean;
   pendingAsk: PendingAsk | null;
   backgroundShells: BackgroundShell[];
   backgroundAgents: BackgroundAgent[];
@@ -38,6 +43,7 @@ export const EMPTY_RUNTIME: SessionRuntime = {
   running: false,
   mintStatus: '',
   mintIcon: '',
+  compacting: false,
   pendingAsk: null,
   backgroundShells: [],
   backgroundAgents: [],
