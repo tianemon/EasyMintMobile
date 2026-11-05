@@ -54,15 +54,22 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
   // danger 是运行错误卡的底色语义，两者在桌面端是两个 token。
   const toneColors = { failed: colors.fail, interrupt: colors.interrupt, done: colors.done };
   const statusColor = (value: string | undefined): string => toneColors[statusTone(value)];
-  // 运行错误：桌面端是红字 alert（ChatPanel 的 error 条目）。手机端整卡一并转红——错误卡混在
-  // 系统消息里若不标色，用户很容易当成又一条普通通知划过去。
+  // 运行错误卡的视觉档位：桌面端 ERROR_TONE_STYLE（ChatPanel.tsx:121-124）——
+  // warn（限流/超时/繁忙，可自愈）→ --color-warning，error（需用户处理）→ --color-danger。
+  // 只影响**图标**：卡片不描边、底色用中性底、正文保持正文色（2026-10-29 用户定的口径），
+  // 整卡转红反而让「可自愈」与「必须处理」看起来一样重。
   const isError = kind === 'error';
+  const errorColor = (message.systemTone ?? 'error') === 'warn' ? colors.warning : colors.danger;
 
-  return <View style={[styles.systemCard, isError && styles.systemCardError]}>
+  return <View style={styles.systemCard}>
     <Pressable disabled={!collapsible} style={styles.systemHeader} onPress={() => setExpanded((value) => !value)}>
-      <SystemKindIcon kind={kind} />
-      <Text style={[styles.systemLabel, isError && { color: colors.danger }]}>{SYSTEM_LABELS[kind] ?? '系统消息'}</Text>
-      {!!status && <Text style={[styles.systemStatus, { color: statusColor(status[2]) }]}>· {status[2]}{status[3] ? ` · ${status[3]}s` : ''}</Text>}
+      <SystemKindIcon kind={kind} color={isError ? errorColor : undefined} />
+      {/* 标题栏与桌面端 ChatPanel.tsx:3414-3424 同序：kind 图标 → ⏺（着状态色）→ 标签 →「- 状态 · Ns」 */}
+      {!!status && <Text style={[styles.systemStatus, { color: statusColor(status[2]) }]}>⏺</Text>}
+      <Text style={styles.systemLabel}>{SYSTEM_LABELS[kind] ?? '系统消息'}</Text>
+      {!!status && <Text style={styles.systemStatus}>
+        {'- '}<Text style={{ color: statusColor(status[2]) }}>{status[2]}</Text>{status[3] ? ` · ${status[3]}s` : ''}
+      </Text>}
       {collapsible && <View style={styles.systemChevron}><ChevronIcon size={iconSize.nav} direction={expanded ? 'down' : 'right'} /></View>}
     </Pressable>
     {showBody && (isResult
@@ -116,7 +123,11 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
         >
           <MarkdownView text={body} />
         </ScrollView>
-        : <Text selectable style={[styles.systemBody, isError && { color: colors.danger }]}>{body}</Text>)}
+        : <>
+          <Text selectable style={styles.systemBody}>{body}</Text>
+          {/* 建议行（桌面端 FlowErrorCard 的 hint）：与正文同宽、弱一档，纯文案不带按钮 */}
+          {!!message.systemHint && <Text selectable style={styles.systemHint}>{message.systemHint}</Text>}
+        </>)}
   </View>;
 }
 
@@ -124,14 +135,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // 左侧系统卡片，与 assistant 气泡左对齐（PC 是 padding 32 + 头像占位 40 后对齐内容列；手机无头像列，
   // 所以不能缩进——早先的 marginLeft 54 会把卡片从左侧推开，展开后更是一路撑到右侧，看着像跑到用户侧了）
   systemCard: { maxWidth: '82%', alignSelf: 'flex-start', borderRadius: radius.lg, borderBottomLeftRadius: 4, backgroundColor: colors.card, overflow: 'hidden' },
-  systemCardError: { backgroundColor: colors.dangerBg },
   systemHeader: { minHeight: 36, paddingHorizontal: space.s3, flexDirection: 'row', alignItems: 'center', gap: 6 },
   systemLabel: { color: colors.systemLabel, fontSize: fontSize.caption, fontWeight: '600' },
-  systemStatus: { fontSize: fontSize.caption, fontWeight: '600' },
+  systemStatus: { color: colors.textPrimary, fontSize: fontSize.caption, fontWeight: '600' },
   systemChevron: { marginLeft: 'auto' },
   summaryScroll: { flexGrow: 0, flexShrink: 0, maxHeight: SUMMARY_BODY_MAX_HEIGHT },
   summaryBody: { paddingHorizontal: space.s3, paddingBottom: 10 },
   systemBody: { paddingHorizontal: space.s3, paddingBottom: 10, color: colors.textSecondary, fontSize: fontSize.sm, lineHeight: 20 },
+  systemHint: { paddingHorizontal: space.s3, paddingBottom: 10, color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 20 },
   // 结果卡正文：与标题栏对齐的内边距，行间不加间隙（PC 用 py-0.5 的行内边距模拟）
   resultScroll: { flexGrow: 0, flexShrink: 0, maxHeight: RESULT_BODY_MAX_HEIGHT },
   resultBody: { paddingHorizontal: space.s3, paddingBottom: 8 },

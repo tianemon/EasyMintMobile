@@ -20,6 +20,8 @@ export type SessionRuntime = {
   running: boolean;
   /** 状态行文案（空 = 不显示） */
   mintStatus: string;
+  /** 状态行图标（工具进行中显示该工具的图标，空 = 用 Mint 的模型图标，桌面端 StatusBar 同款） */
+  mintIcon: string;
   pendingAsk: PendingAsk | null;
   backgroundShells: BackgroundShell[];
   backgroundAgents: BackgroundAgent[];
@@ -35,6 +37,7 @@ export const EMPTY_RUNTIME: SessionRuntime = {
   messages: [],
   running: false,
   mintStatus: '',
+  mintIcon: '',
   pendingAsk: null,
   backgroundShells: [],
   backgroundAgents: [],

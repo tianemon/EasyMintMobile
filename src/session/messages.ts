@@ -71,6 +71,10 @@ export type DisplayMessage = {
   blocks?: DisplayBlock[];
   streaming?: boolean;
   systemKind?: string;
+  /** 系统卡建议行（错误卡的第二行，桌面端 FlowErrorCard 的 hint） */
+  systemHint?: string;
+  /** 系统卡视觉档位：warn = 暂时性可自愈（限流/超时），error = 需用户处理 */
+  systemTone?: 'warn' | 'error';
   attachments?: DisplayAttachment[];
   /** 落盘时间（快照 created_at / 事件 timestamp），用于按时间有序插入，见 insertMessageByTime */
   createdAt?: number;

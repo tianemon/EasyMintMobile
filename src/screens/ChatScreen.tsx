@@ -5,7 +5,7 @@ import { Composer } from '../components/Composer';
 import type { ComposerProps } from '../components/Composer';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Header } from '../components/Header';
-import { ModelGlyph } from '../components/icons';
+import { ModelGlyph, ToolIcon } from '../components/icons';
 import { MessageList } from '../components/MessageList';
 import { ConnectionIndicator } from '../components/ProjectTitle';
 import type { BackgroundAgent, BackgroundShell, PendingAsk } from '../protocol/types';
@@ -27,6 +27,8 @@ type ChatScreenProps = {
   backgroundAgents: BackgroundAgent[];
   running: boolean;
   mintStatus: string;
+  /** 状态行图标：工具进行中是该工具的图标，其余为空（用模型图标） */
+  mintIcon: string;
   composer: ComposerProps;
   /** 点后台命令 → 打开输出查看页（PC ShellBar 同款） */
   onOpenShellOutput: (shell: BackgroundShell) => void;
@@ -47,18 +49,26 @@ export function ChatScreen(props: ChatScreenProps) {
     {!!props.pendingAsk && <AskCard ask={props.pendingAsk} onSubmit={props.onAnswerSubmit} />}
     <BackgroundPills shells={props.backgroundShells} agents={props.backgroundAgents}
       onOpenShellOutput={props.onOpenShellOutput} onStopShell={props.onStopShell} onStopAgent={props.onStopAgent} />
-    {props.running && !!props.mintStatus && <MintStatus text={props.mintStatus} />}
+    {props.running && !!props.mintStatus && <MintStatus text={props.mintStatus} icon={props.mintIcon} />}
     <Composer {...props.composer} />
   </KeyboardAvoidingView>;
 }
 
-/** 运行状态行：模型图标（带动画）+ 当前动作文案，与 PC StatusBar 同构 */
-function MintStatus({ text }: { text: string }) {
+/**
+ * 运行状态行：图标 + 当前动作文案，与桌面端 StatusBar 同构。
+ *
+ * 图标按状态切换（StatusBar.tsx:163-166）：有工具在跑就换成**该工具的图标**，
+ * 否则用带动效的模型图标。图标占固定宽度（PC 是 w-[1.25em]），换图标不能把文字推来推去。
+ */
+function MintStatus({ text, icon }: { text: string; icon?: string }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  // 图标占固定宽度（PC 是 w-[1.25em]）：动效不能把右侧文字推来推去
   return <View style={styles.mintStatus}>
-    <View style={styles.mintStatusGlyph}><ModelGlyph animated size={14} color={colors.textSecondary} /></View>
+    <View style={styles.mintStatusGlyph}>
+      {icon
+        ? <ToolIcon name={icon} size={14} color={colors.textSecondary} />
+        : <ModelGlyph animated size={14} color={colors.textSecondary} />}
+    </View>
     <Text style={styles.mintStatusText}>{text}</Text>
   </View>;
 }

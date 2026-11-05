@@ -9,6 +9,8 @@ import { droppedSteerText, resolveStatusHint, streamStatusHint, streamSystemNoti
 import { resolveSettingsRevision, SETTINGS_REPLAY_WINDOW_MS } from '../src/session/settings-revision.ts';
 import { toolDisplay, toolLabel, toolStatus } from '../src/session/tools.ts';
 import { resultError } from '../src/connection/remote-result.ts';
+import { classifyApiError } from '../src/session/api-errors.ts';
+import { toolActivityIcon } from '../src/session/tools.ts';
 
 test('压缩类帧映射到状态栏文案，结束帧清空', () => {
   // ui.ChatPanel.contextNeedsCompactionCompacting（手机端没有手动压缩入口，统一用自动那条）
@@ -153,4 +155,36 @@ test('MCP 工具名连续分隔符不产生空段（与 PC 同款）', () => {
   assert.equal(display('mcp__srv__tool'), 'MCP · srv / tool');
   assert.equal(display('mcp__srv____tool'), 'MCP · srv / tool');
   assert.equal(display('mcp____srv__tool'), 'MCP · srv / tool');
+});
+
+test('上游错误原文归一化成桌面端那几句话（app/shared/api-errors.ts 同表）', () => {
+  // 限流 / 服务繁忙是 warn 档（可自愈），auth / 额度是 error 档（需用户处理）
+  assert.deepEqual(classifyApiError('Error: 429 Too Many Requests'),
+    { code: 'rate_limit', tone: 'warn', message: '请求过于频繁，稍后再试' });
+  const busy = classifyApiError('503 Service Unavailable');
+  assert.equal(busy.code, 'service_unavailable');
+  assert.equal(busy.tone, 'warn');
+  assert.equal(busy.message, 'AI 服务暂时不可用');
+  assert.equal(busy.hint, '稍后再试，或换一个模型/服务商');
+  assert.equal(classifyApiError('401 invalid api key').message, '密钥无效或已过期');
+  assert.equal(classifyApiError('insufficient_quota').hint, '检查服务商余额或额度');
+  // 413 带 kind：桌面端据此出「清理图片」而不是「重试」
+  const tooLarge = classifyApiError('413 Request Entity Too Large');
+  assert.equal(tooLarge.kind, 'request_too_large');
+  assert.equal(tooLarge.hint, '可整理历史图片后重试，或减少本次附件');
+  // 用户主动打断不是错误——桌面端靠这个 code 判断「不出卡」
+  assert.equal(classifyApiError('This operation was aborted').code, 'stopped');
+  // 主进程已归一化成中文的路径靠中文分支命中（一份表，两个方向都能认）
+  assert.equal(classifyApiError('对话内容超出模型上限').code, 'context_limit');
+  // 未命中：去掉 Error: 前缀与换行、截断，仍要让用户看得懂是哪一步失败
+  assert.equal(classifyApiError('Error: something weird happened\n  at stack').message, 'something weird happened');
+  assert.equal(classifyApiError('').message, '请求失败');
+});
+
+test('状态行图标只由工具名决定（工具进行中要把 Mint 图标换成工具图标）', () => {
+  assert.equal(toolActivityIcon('read'), 'read');
+  assert.equal(toolActivityIcon('bash'), 'bash');
+  assert.equal(toolActivityIcon('grep'), 'grep');
+  assert.equal(toolActivityIcon('web_search'), 'web_search');
+  assert.equal(toolActivityIcon('mcp__srv__tool'), 'call_mcp_tool');
 });

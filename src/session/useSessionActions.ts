@@ -20,7 +20,7 @@ export type SessionActionsStore = {
   /** 新会话：`session.send` 拿到真实 id 后把草稿格状态迁过去 */
   migrateRuntime: (from: string, to: string) => void;
   /** 状态文案（按会话去重） */
-  setMintStatus: (sessionId: string, value: string) => void;
+  setMintStatus: (sessionId: string, value: string, icon?: string) => void;
   /** 回合标记：与 useRemoteEvents / applySnapshot 共享，清空状态栏时据此回落到「正在处理...」 */
   activeTurn: RefObject<Record<string, boolean>>;
   setPage: (page: Page) => void;

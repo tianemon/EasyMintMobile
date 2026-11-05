@@ -124,16 +124,18 @@ function AppContent() {
   const activeSessionId = session?.sessionId ?? DRAFT_SESSION_ID;
   const active = runtime[activeSessionId] ?? EMPTY_RUNTIME;
   const {
-    messages, running, mintStatus, pendingAsk, backgroundShells, backgroundAgents,
+    messages, running, mintStatus, mintIcon, pendingAsk, backgroundShells, backgroundAgents,
     contextUsage, permission, thinking, thinkingOptions, model,
   } = active;
 
-  // 状态文案去重（**每个会话各自**记录上一次的值）：流式期间每帧都会写同一个值，逐帧 setState 会白跑一次整树渲染。
+  // 状态行去重（**每个会话各自**记录上一次的值）：流式期间每帧都会写同一个值，逐帧 setState 会白跑一次整树渲染。
+  // 键里带上图标：文案相同但工具换了（「正在处理...」→ 另一个工具的图标）也要更新。
   const mintStatusRef = useRef<Record<string, string>>({});
-  const updateMintStatus = useCallback((sessionId: string, value: string) => {
-    if ((mintStatusRef.current[sessionId] ?? '') === value) return;
-    mintStatusRef.current[sessionId] = value;
-    patchRuntime(sessionId, { mintStatus: value });
+  const updateMintStatus = useCallback((sessionId: string, value: string, icon?: string) => {
+    const key = `${icon ?? ''}|${value}`;
+    if ((mintStatusRef.current[sessionId] ?? '') === key) return;
+    mintStatusRef.current[sessionId] = key;
+    patchRuntime(sessionId, { mintStatus: value, mintIcon: icon ?? '' });
   }, [patchRuntime]);
 
   const fail = useCallback((value: unknown) => {
@@ -208,7 +210,9 @@ function AppContent() {
     const isRunning = recovered.running;
     activeTurn.current[sessionId] = isRunning;
     const available = snapshot.thinking?.available;
-    updateMintStatus(sessionId, isRunning ? '正在处理...' : '');
+    // 与桌面端一致：快照本身不产生状态信号（StatusBar 此时无文本，整条不显示），
+    // 下一个事件（tool_progress / 流式帧）才会把状态行带出来。这里只清掉上一个会话的残留。
+    updateMintStatus(sessionId, '');
     patchRuntime(sessionId, {
       // snapshotMessages 已按列表顺序返回（最新在前）
       messages: recovered.messages,
@@ -371,7 +375,7 @@ function AppContent() {
     onOpenShellOutput={(shell) => setViewingShell({ id: shell.id, command: shell.command })}
     onStopShell={(shellId) => void actions.stopShell(shellId)}
     onStopAgent={(delegationId, taskIndex) => void actions.stopAgent(delegationId, taskIndex)}
-    running={running} mintStatus={mintStatus} composer={composer} onBack={goBack} />;
+    running={running} mintStatus={mintStatus} mintIcon={mintIcon} composer={composer} onBack={goBack} />;
 
   // 状态栏图标明暗跟主题走：深色主题上用浅色图标（PC 亦然）
   return <SafeAreaProvider><SafeAreaView style={commonStyles.safe} edges={['top', 'bottom']}><StatusBar style={effectiveMode === 'dark' ? 'light' : 'dark'} />{content}

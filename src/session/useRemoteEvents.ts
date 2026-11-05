@@ -7,12 +7,13 @@ import type {
 import type { Page } from '../types';
 import { contentBlocks, contentText, eventTimestamp, insertMessageByTime, markToolDone, nestedCalls, object, PERMISSION_MARKER, prependMessage, presentationFrom, toolPresentation, upsertMessage } from './messages';
 import type { DisplayAttachment, DisplayUsage } from './messages';
+import { classifyApiError } from './api-errors';
 import type { PatchRuntime } from './runtime';
 import { createStreamFrameQueue, scheduleOnNextFrame } from './stream-frames';
 import { resolveSettingsRevision } from './settings-revision';
 import { COMPACTING_HINT, droppedSteerText, resolveStatusHint, streamStatusHint, streamSystemNotice, streamingHint } from './status-hints';
 import { THINKING_ORDER } from './thinking';
-import { toolStatusTargeted } from './tools';
+import { toolActivityIcon, toolStatusTargeted } from './tools';
 
 /**
  * 事件归并要写入的状态。
@@ -24,7 +25,7 @@ import { toolStatusTargeted } from './tools';
 export type RemoteEventsStore = {
   patchRuntime: PatchRuntime;
   /** 状态文案带按会话去重 */
-  setMintStatus: (sessionId: string, value: string) => void;
+  setMintStatus: (sessionId: string, value: string, icon?: string) => void;
   /** 后台任务清单是全量的，按会话分组写回 */
   syncBackground: (kind: 'shell' | 'delegation', items: { sessionId?: string }[]) => void;
   /** 后台命令的实时输出块：除了累进会话运行态，再转发给「输出查看页」（它自己维护追加式内容） */
@@ -311,11 +312,17 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         activeTurn.current[sessionId] = false;
         streamMessageIds.current[sessionId] = null;
         store.setMintStatus(sessionId, '');
+        // 错误归一化与桌面端同表（app/shared/api-errors.ts）：上游原文 → 面向用户的中文 + 建议，
+        // warn/error 两档决定卡片配色。「已停止」不出卡——那是用户主动打断的正常副作用，
+        // 桌面端 ChatPanel.tsx:1785 同样是 `if (info.code !== 'stopped')` 才提示。
+        const failure = type === 'error' ? classifyApiError(data.message) : null;
+        const card = failure && failure.code !== 'stopped' ? failure : null;
         store.patchRuntime(sessionId, (current) => ({
           running: false,
-          messages: type === 'error'
+          messages: card
             ? prependMessage(current.messages.map((item) => item.streaming ? { ...item, streaming: false } : item), {
-              id: `error-${Date.now()}`, role: 'system', text: String(data.message ?? '任务执行失败'), systemKind: 'error',
+              id: `error-${Date.now()}`, role: 'system', text: card.message, systemKind: 'error',
+              systemTone: card.tone, ...(card.hint ? { systemHint: card.hint } : {}),
             })
             : current.messages.map((item) => item.streaming ? { ...item, streaming: false } : item),
         }));
@@ -348,8 +355,10 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       } else if (type === 'tool_progress') {
         const name = String(data.toolName ?? '工具调用');
         const toolArgs = object(data.toolArgs);
-        // 状态栏带目标（「正在读取 app.ts」）——桌面端 StatusBar 的 toolActivity 文案同源
-        store.setMintStatus(sessionId, toolStatusTargeted(name, Object.keys(toolArgs).length ? toolArgs : undefined));
+        // 状态栏带目标（「正在读取 app.ts」）——桌面端 StatusBar 的 toolActivity 文案同源；
+        // 同时把图标换成该工具的图标（桌面端工具进行中就是工具图标，不是 Mint 图标）
+        store.setMintStatus(sessionId,
+          toolStatusTargeted(name, Object.keys(toolArgs).length ? toolArgs : undefined), toolActivityIcon(name));
         const toolId = String(data.toolCallId ?? name);
         // id 在 updater 外算好：updater 可能被 React 重复调用，在里面取 Date.now() 会得到不同的 id
         const messageId = streamMessageIds.current[sessionId] ?? `stream-${String(data.runId ?? 'run')}-${Date.now()}`;

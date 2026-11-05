@@ -204,6 +204,14 @@ export function toolActivity(name: string, input: Record<string, unknown> | unde
   return { text: format(target), fullText: format(fullTarget), action, label: words.label, icon: ACTION_ICONS[action] };
 }
 
+/**
+ * 工具 → 状态行图标（只由工具名决定，与 `toolActivity` 同一张 ACTION_ICONS）。
+ * 桌面端 StatusBar 在工具进行中把 Mint 图标换成工具图标（StatusBar.tsx:163-166），手机端同款。
+ */
+export function toolActivityIcon(name: string): string {
+  return ACTION_ICONS[toolAction(name)];
+}
+
 /** 工具状态 → 带目标的进度文案（「正在读取 app.ts」）；没有可用参数时回落到 toolStatus 的原文案 */
 export function toolStatusTargeted(name: string, input: Record<string, unknown> | undefined): string {
   const activity = toolActivity(name, input, 'running');
