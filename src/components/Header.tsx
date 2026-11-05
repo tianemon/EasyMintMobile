@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ThemeColors } from '../theme/tokens';
-import { fontSize, space } from '../theme/tokens';
+import { chatInset, fontSize, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import { ChevronIcon, iconSize } from './icons';
 
@@ -30,7 +30,7 @@ export function Header({ title, onBack, right }: HeaderProps) {
 /** 标题栏样式：同时供页面自定义右侧操作（如首页「设置」）复用，保证与 Header 同一套值。
  *  取用方式：`const headerStyles = useThemedStyles(makeHeaderStyles)` */
 export const makeHeaderStyles = (colors: ThemeColors) => StyleSheet.create({
-  header: { height: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.divider, paddingHorizontal: space.s3, backgroundColor: colors.content },
+  header: { height: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.divider, paddingHorizontal: chatInset, backgroundColor: colors.content },
   headerSide: { width: 88 },
   headerBack: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   headerRight: { alignItems: 'flex-end' },

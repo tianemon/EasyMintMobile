@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ListRenderItemInfo } from 'react-native';
 import type { DisplayMessage } from '../session/messages';
@@ -72,6 +72,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
    * 表现为一片盖住消息、翻不回去的空白。
    */
   row: { flexGrow: 0, flexShrink: 0, paddingBottom: space.s3 },
+  // 尾部条带内部不再加左右边距：列表内容容器已经给了 chatInset，两块各自贴在这条线上
+  tail: { flexGrow: 0, flexShrink: 0 },
   bubble: { flexGrow: 0, flexShrink: 0, maxWidth: '88%', padding: 13, borderRadius: radius.lg },
   userBubble: { alignSelf: 'flex-end', backgroundColor: colors.userBubbleBg },
   bubbleText: { color: colors.userBubbleText, fontSize: fontSize.base, lineHeight: USER_LINE_HEIGHT },
@@ -90,6 +92,16 @@ type MessageListProps = {
   messages: DisplayMessage[];
   /** 会话是否仍在跑：决定最后一个回合是「运行中折叠」还是「完成用时」 */
   running: boolean;
+  /**
+   * 列表尾部的元素（视觉底部）：提问卡 + 状态行。
+   *
+   * 桌面端把这两块放在滚动区里（`ChatPanel.tsx:3046-3057`，`chat-messages` 内、消息之后），
+   * 所以它们**跟着消息走**，不固定在输入卡上方。手机端用倒置列表的 `ListHeaderComponent`
+   * 表达同一个位置（倒置后 header 落在视觉底部）。
+   */
+  tail?: React.ReactNode;
+  /** 提问卡 id：出现时把列表滚到底，否则用户上翻时看不到这条必须回答的卡 */
+  askId?: string;
 };
 
 /** 稳定 renderItem / keyExtractor：store 每次事件都产生新数组，内联函数会让 FlatList 对全部行重新求值 */
@@ -112,9 +124,14 @@ const maintainVisibleContentPosition = { minIndexForVisible: 0, autoscrollToTopT
  * maintainVisibleContentPosition 显式开启：用户停在最新消息附近时跟随流式增长；上翻历史后
  * 不会被新内容拉回。它不是 VirtualizedList 的默认行为，不能删掉后依赖隐式锚定。
  */
-export const MessageList = memo(function MessageList({ messages, running }: MessageListProps) {
+export const MessageList = memo(function MessageList({ messages, running, tail, askId }: MessageListProps) {
   const styles = useThemedStyles(makeStyles);
   const rows = useMemo(() => buildRows(messages, running, describeProcessItem), [messages, running]);
+  const listRef = useRef<FlatList<DisplayRow>>(null);
+  // 提问卡出现 → 滚到底（倒置列表 offset 0 就是底部），与桌面端 ChatPanel.tsx:1191 同款
+  useEffect(() => {
+    if (askId) listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [askId]);
   const [innerScrollGesture, setInnerScrollGesture] = useState(false);
   const setInnerGesture = useCallback((active: boolean): void => setInnerScrollGesture(active), []);
   const renderRow = useCallback(({ item }: ListRenderItemInfo<DisplayRow>) => item.kind === 'turn'
@@ -123,7 +140,10 @@ export const MessageList = memo(function MessageList({ messages, running }: Mess
 
   return <View style={styles.wrap}>
     <FlatList
+      ref={listRef}
       data={rows}
+      // 倒置列表里 header 落在视觉底部，正是桌面端「消息之后、输入卡之前」的位置
+      ListHeaderComponent={tail ? <View style={styles.tail}>{tail}</View> : null}
       renderItem={renderRow}
       keyExtractor={keyExtractor}
       style={styles.wrap}
