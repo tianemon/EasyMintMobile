@@ -46,6 +46,8 @@ npm run ipa            # 出已签名 IPA；`npm run ipa -- --unsigned` 出未�
 
 [液态玻璃解析与实现指导](docs/liquid-glass-guide.md)记录左右细暗边与上下细亮边的主题互补经验、原生折射参数、黑边排查方法及真机验收要点。
 
+[液态玻璃调参页](labs/liquid-glass/README.md)提供与 Android 材质公式同步的 WebGL 预览，支持 28 项参数、亮暗主题、基线对比及参数导入导出。
+
 ## 数据边界
 
 手机只在系统 SecureStore/Keychain 中保存 PC 标识、局域网地址、设备标识和配对共享密钥。项目、会话、消息、模型配置与实时输出只保存在运行内存中，App 不把这些业务数据写入文件、数据库或异步缓存。
