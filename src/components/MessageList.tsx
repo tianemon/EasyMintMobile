@@ -8,6 +8,7 @@ import { buildRows } from '../session/turns';
 import type { ThemeColors } from '../theme/tokens';
 import { chatInset, fontSize, radius, space } from '../theme/tokens';
 import { useThemedStyles } from '../theme/theme-context';
+import { MintStatus } from './MintStatus';
 import { SystemCard } from './SystemCard';
 import { TurnRow } from './TurnView';
 
@@ -92,16 +93,20 @@ type MessageListProps = {
   messages: DisplayMessage[];
   /** 会话是否仍在跑：决定最后一个回合是「运行中折叠」还是「完成用时」 */
   running: boolean;
-  /**
-   * 列表尾部的元素（视觉底部）：提问卡 + 状态行。
-   *
-   * 桌面端把这两块放在滚动区里（`ChatPanel.tsx:3046-3057`，`chat-messages` 内、消息之后），
-   * 所以它们**跟着消息走**，不固定在输入卡上方。手机端用倒置列表的 `ListHeaderComponent`
-   * 表达同一个位置（倒置后 header 落在视觉底部）。
-   */
+  /** 列表尾部额外内容（目前只有提问卡）；状态行由 `statusText` 单独给，见下面的判定 */
   tail?: React.ReactNode;
   /** 提问卡 id：出现时把列表滚到底，否则用户上翻时看不到这条必须回答的卡 */
   askId?: string;
+  /**
+   * 运行状态文案 / 图标。**只在没有「正在跑的过程」时渲染**——桌面端这条是二选一：
+   * `ChatPanel.tsx:3055` 是 `liveProcess ? <ExecutionProcess .../> : <StatusBar/>`，
+   * 有 live process 时状态就由那条过程行自己承担（带转圈、可展开），独立状态栏根本不出现。
+   *
+   * 手机端此前两边都画：回合行里一条过程摘要 + 底部再一条状态行。底部那条因为倒置列表
+   * 锚在 offset 0，看起来永远是「钉在输入卡上方」的那一行——这就是「状态没跟着消息走」。
+   */
+  statusText?: string;
+  statusIcon?: string;
 };
 
 /** 稳定 renderItem / keyExtractor：store 每次事件都产生新数组，内联函数会让 FlatList 对全部行重新求值 */
@@ -124,9 +129,12 @@ const maintainVisibleContentPosition = { minIndexForVisible: 0, autoscrollToTopT
  * maintainVisibleContentPosition 显式开启：用户停在最新消息附近时跟随流式增长；上翻历史后
  * 不会被新内容拉回。它不是 VirtualizedList 的默认行为，不能删掉后依赖隐式锚定。
  */
-export const MessageList = memo(function MessageList({ messages, running, tail, askId }: MessageListProps) {
+export const MessageList = memo(function MessageList({ messages, running, tail, askId, statusText, statusIcon }: MessageListProps) {
   const styles = useThemedStyles(makeStyles);
   const rows = useMemo(() => buildRows(messages, running, describeProcessItem), [messages, running]);
+  // 尾部状态行只在「没有正在跑的过程」时出现：有过程就跟桌面端一样由回合行承担（避免同屏两条状态）
+  const liveTurn = rows.find((row) => row.kind === 'turn' && row.turn.active);
+  const showStatus = !!statusText && !(liveTurn?.kind === 'turn' && liveTurn.turn.processCount > 0);
   const listRef = useRef<FlatList<DisplayRow>>(null);
   // 提问卡出现 → 滚到底（倒置列表 offset 0 就是底部），与桌面端 ChatPanel.tsx:1191 同款
   useEffect(() => {
@@ -142,8 +150,14 @@ export const MessageList = memo(function MessageList({ messages, running, tail, 
     <FlatList
       ref={listRef}
       data={rows}
-      // 倒置列表里 header 落在视觉底部，正是桌面端「消息之后、输入卡之前」的位置
-      ListHeaderComponent={tail ? <View style={styles.tail}>{tail}</View> : null}
+      // 倒置列表里 header 落在视觉底部，正是桌面端「消息之后、输入卡之前」的位置；
+      // 提问卡在上、状态行在下（桌面 ChatPanel.tsx:3050-3057 同序）
+      ListHeaderComponent={
+        <View style={styles.tail}>
+          {tail}
+          {showStatus && <MintStatus text={statusText!} icon={statusIcon} />}
+        </View>
+      }
       renderItem={renderRow}
       keyExtractor={keyExtractor}
       style={styles.wrap}
