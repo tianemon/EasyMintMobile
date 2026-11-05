@@ -68,8 +68,25 @@ export function decodeEntities(text: string): string {
   });
 }
 
-// ── 流式尾部渐隐 ─────────────────────────────────────
+/**
+ * HTML 降级成纯文本。
+ *
+ * 桌面端能把内联 HTML 真渲染出来（`MarkdownHtml` 用 DOMPurify + innerHTML）；RN 没有 HTML 渲染能力，
+ * 直接把原文铺出来会让用户看到 `<details><summary>` 这种标签文本（比丢内容还糟）。
+ * 这里按块级标签换行、行内标签剥壳，保留可读的文字与换行——信息量对齐桌面端，形式降级。
+ */
+export function htmlToText(html: string): string {
+  return decodeEntities(html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6]|details|summary|blockquote|pre)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<[^>]*>/g, ''))
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
+// ── 流式尾部渐隐 ─────────────────────────────────────
 /** 渐隐覆盖的可见字符数（与桌面端 tail-fade.ts 的 TAIL_FADE_CHARS 同值） */
 export const TAIL_FADE_CHARS = 4;
 /** 末字符保留的可见度（桌面端 2026-09-15 拍板值：再浅看不出、再深像被切断） */

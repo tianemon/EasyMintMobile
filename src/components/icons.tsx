@@ -311,7 +311,7 @@ export function DelegateStatusIcon({ status, size = iconSize.tool }: { status?: 
 /** 工具图标形状：按 name 归类取 Lucide path（映射与 PC `toolIconPaths` 逐条对应） */
 function toolIconShape(name: string): ReactNode | null {
   let n = name.toLowerCase();
-  if (n.startsWith('mcp__')) n = 'mcp'; // MCP 工具统一扳手
+  if (n.startsWith('mcp__') || n === 'search_mcp_tools' || n === 'call_mcp_tool') n = 'mcp'; // MCP 工具统一扳手
   switch (n) {
     case 'bash': case 'powershell': return <><Path d="m7 11 2-2-2-2" /><Path d="M11 13h4" /><Rect width={18} height={18} x={3} y={3} rx={2} ry={2} /></>;
     case 'edit': return <><Path d="M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34" /><Path d="M14 2v5a1 1 0 0 0 1 1h5" /><Path d="M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z" /></>;

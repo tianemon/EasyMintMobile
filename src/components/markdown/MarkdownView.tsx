@@ -7,7 +7,7 @@ import { fontSize, space } from '../../theme/tokens';
 import { useThemedStyles } from '../../theme/theme-context';
 import { CodeBlock } from './CodeBlock';
 import { InlineTokens } from './inline';
-import { languageLabel, lexMarkdown, splitMarkdownParts, splitStableBlocks, trimCodeBody } from './parse';
+import { htmlToText, languageLabel, lexMarkdown, splitMarkdownParts, splitStableBlocks, trimCodeBody } from './parse';
 
 /**
  * 手机端的 Markdown 渲染入口（自绘 RN 组件，不走 WebView）。
@@ -115,8 +115,13 @@ function renderBlock(styles: MarkdownStyles, token: Token, key: number, fade: bo
       return renderTable(styles, key, token as Tokens.Table, fade);
     case 'hr':
       return <View key={key} style={styles.hr} />;
-    case 'html':
-      return <Text key={key} selectable={textSelectable} style={[styles.paragraph, quote && styles.quoteText, last && styles.blockLast]}>{token.text}</Text>;
+    case 'html': {
+      // 独立成块的 HTML（桌面端真渲染）：手机上剥标签保留文字，别把 `<details>` 当正文打出来
+      const text = htmlToText(token.text);
+      return text
+        ? <Text key={key} selectable={textSelectable} style={[styles.paragraph, quote && styles.quoteText, last && styles.blockLast]}>{text}</Text>
+        : null;
+    }
     default:
       return 'tokens' in token && token.tokens
         ? <View key={key}>{renderBlocks(styles, token.tokens.filter(isVisible), fade, quote)}</View>

@@ -43,7 +43,7 @@ export function ChatScreen(props: ChatScreenProps) {
   return <KeyboardAvoidingView style={commonStyles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
     <Header title={props.title} onBack={props.onBack} right={<ConnectionIndicator status={props.connection} />} />
     {/* 消息区渲染异常时保留错误提示，避免整页空白 */}
-    <ErrorBoundary label="消息区渲染出错"><MessageList messages={props.messages} /></ErrorBoundary>
+    <ErrorBoundary label="消息区渲染出错"><MessageList messages={props.messages} running={props.running} /></ErrorBoundary>
     {!!props.pendingAsk && <AskCard ask={props.pendingAsk} onSubmit={props.onAnswerSubmit} />}
     <BackgroundPills shells={props.backgroundShells} agents={props.backgroundAgents}
       onOpenShellOutput={props.onOpenShellOutput} onStopShell={props.onStopShell} onStopAgent={props.onStopAgent} />

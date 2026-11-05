@@ -27,6 +27,9 @@ export const lightColors = {
   interrupt: '#febc2e', // --color-interrupt
   fail: '#ff5f57', // --color-fail
   permissionOn: '#ed7482', // --color-permission-on（权限「完全访问」轨道玫红；PC 深色段未覆盖，两套同值）
+  /** diff 行底色（PC `--color-diff-add` / `--color-diff-del`；亮色是实色） */
+  diffAdd: '#d6f0de',
+  diffRemove: '#fbdddd',
 
   // ── 文字 ────────────────────────────────────
   textPrimary: '#1a1a1a', // --color-text-primary
@@ -93,7 +96,7 @@ export type ThemeColors = { [K in keyof typeof lightColors]: string };
  * 手机端自有色（下面那组）PC 没有对应 token，按同一套层级配的（外深内浅、正文对比对齐 #d4d4d4 系）。
  */
 export const darkColors: ThemeColors = {
-  // ── 品牌与语义色（PC 深色段下 accent 变灰白，用户气泡随之变深灰）──
+  // ── 品牌与语义色（PC 深色段下 accent 变灰白，但用户气泡不跟随 accent，见下方气泡段）──
   accent: '#d4d4d4', // --color-accent
   accentHover: '#e5e5e5', // --color-accent-hover
   success: '#22c55e', // --color-success
@@ -108,6 +111,9 @@ export const darkColors: ThemeColors = {
   interrupt: '#e0a725', // --color-interrupt
   fail: '#ff5f57', // --color-fail
   permissionOn: '#ed7482', // PC 深色段未覆盖，与亮色同值
+  // PC 深色段用 color-mix(success/danger 12%, transparent)：RN 无 color-mix，按同比例折成 rgba
+  diffAdd: 'rgba(34,197,94,0.12)',
+  diffRemove: 'rgba(239,68,68,0.12)',
 
   // ── 文字 ────────────────────────────────────
   textPrimary: '#d4d4d4', // --color-text-primary
@@ -140,9 +146,10 @@ export const darkColors: ThemeColors = {
   // ── 状态点 ──────────────────────────────────
   dotGray: '#444444', // --color-dot-gray
 
-  // ── 气泡（PC 深色下用户气泡是深灰，不是品牌绿）──────
-  userBubbleBg: '#2a2a2a', // --msg-user-bg
-  userBubbleText: '#d4d4d4', // --msg-user-text = var(--color-text-primary)
+  // ── 气泡：PC 深色段固定蓝 #183e76，不跟随变灰的 accent ──
+  // 来源：桌面端 app/renderer/src/index.css:505-506（[data-theme="dark"]，提交 ce1aa477 / 2026-10-25）
+  userBubbleBg: '#183e76', // --msg-user-bg
+  userBubbleText: '#f6fafe', // --msg-user-text
 
   // ── 手机端自有色：PC 无对应 token，按深色层级自配 ──────
   systemLabel: '#8d948d', // 系统卡图标/标签：亮色 #777b77 → 深底上提亮，保持中性

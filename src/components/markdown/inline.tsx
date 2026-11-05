@@ -4,7 +4,7 @@ import type { Token } from 'marked';
 import type { ThemeColors } from '../../theme/tokens';
 import { fontSize } from '../../theme/tokens';
 import { useThemedStyles } from '../../theme/theme-context';
-import { decodeEntities, fadeOpacity, safeHref, splitFadeTail } from './parse';
+import { decodeEntities, fadeOpacity, htmlToText, safeHref, splitFadeTail } from './parse';
 
 /**
  * 行内内容渲染：把 marked 的行内 token 渲染成嵌套 `<Text>`。
@@ -78,8 +78,8 @@ function renderInline(styles: InlineStyles, token: Token, key: number, fade: boo
       // 手机端不下载远端图片（流量与数据边界考虑），保留 alt 文本，内容不丢
       return <Text key={key} style={styles.imageAlt}>{decodeEntities(token.text)}</Text>;
     case 'html':
-      // RN 无 HTML 渲染能力：标签丢弃，标签内的文本由相邻 text token 正常显示
-      return null;
+      // RN 无 HTML 渲染能力：剥掉标签但保留标签里的文字（返回 null 会把内容整段吞掉）
+      return htmlToText(token.raw);
     default:
       // marked 新增的 token 类型：有子 token 就递归，避免内容整段消失
       return childTokens(token).length > 0 ? <Text key={key}><InlineTokens tokens={childTokens(token)} /></Text> : token.raw;

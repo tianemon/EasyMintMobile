@@ -98,6 +98,9 @@ export interface SessionSnapshot {
     uuid: string;
     message: unknown;
     created_at?: number;
+    /** 桌面端 session-service.ts:284-285 的轻档标记：条目仍在历史里，但已移出模型上下文 / 图片已从上下文剥离 */
+    out_of_context?: boolean;
+    image_stripped?: boolean;
   }>;
   cache?: {
     model?: string;
