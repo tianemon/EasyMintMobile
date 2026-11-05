@@ -1,7 +1,7 @@
 import type { OpenProject, SessionListItem } from './protocol/types';
 
 /** 页面路由（App 根状态） */
-export type Page = 'home' | 'scanner' | 'projects' | 'sessions' | 'chat';
+export type Page = 'home' | 'scanner' | 'projects' | 'sessions' | 'chat' | 'settings';
 
 /** 与电脑端的连接状态（RemoteClient.onStatus 上报） */
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';

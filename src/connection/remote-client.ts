@@ -154,7 +154,15 @@ export class RemoteClient {
     if (this.socket?.readyState === WebSocket.OPEN) return;
     this.intentionalClose = false;
     this.emitStatus('connecting');
-    const socket = await connectAny(this.credential.addresses, this.credential.port);
+    let socket: WebSocket;
+    try {
+      socket = await connectAny(this.credential.addresses, this.credential.port);
+    } catch (error) {
+      // 先开手机、后开电脑：第一次必然连不上。这里不排重试的话，之后电脑起来了也没人再试
+      this.emitStatus('disconnected');
+      this.scheduleReconnect();
+      throw error;
+    }
     this.socket = socket;
     this.connectionId = randomId();
     this.sendSequence = 0;

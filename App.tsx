@@ -10,18 +10,22 @@ import type { ComposerProps } from './src/components/Composer';
 import { parsePairingUri } from './src/connection/pairing-uri';
 import { pairWithPc, RemoteClient } from './src/connection/remote-client';
 import type {
-  BackgroundAgent, BackgroundShell, ModelCapabilities, OpenProject, PcCredential, PendingAsk, PermissionMode,
+  BackgroundAgent, BackgroundShell, ModelCapabilities, OpenProject, PendingAsk, PermissionMode,
   SessionListItem, SessionSnapshot,
 } from './src/protocol/types';
+import { ArchiveSheet } from './src/screens/ArchiveSheet';
 import { ChatScreen } from './src/screens/ChatScreen';
-import { ConnectionSettingsSheet } from './src/screens/ConnectionSettingsSheet';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ProjectsScreen } from './src/screens/ProjectsScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { SessionMenuModal } from './src/screens/SessionMenuModal';
 import { SessionsScreen } from './src/screens/SessionsScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ShellOutputSheet } from './src/screens/ShellOutputSheet';
-import { clearCredential, loadCredential, saveCredential } from './src/security/credential-store';
+import {
+  loadDevices, markDeviceConnected, removeDevice, saveDevice, setActiveDevice,
+} from './src/security/credential-store';
+import type { StoredDevice } from './src/security/credential-store';
 import { endCompacting } from './src/session/compacting';
 import { snapshotMessagesWithBuffer } from './src/session/messages';
 import type { DisplayMessage } from './src/session/messages';
@@ -36,7 +40,7 @@ import { useSessionActions } from './src/session/useSessionActions';
 import type { SessionActionsStore } from './src/session/useSessionActions';
 import { makeCommonStyles } from './src/theme/commonStyles';
 import { ThemeProvider, useTheme, useThemedStyles } from './src/theme/theme-context';
-import type { AskAnswer, ComposerControl, ConnectionStatus, ContextUsage, HomeSession, Page } from './src/types';
+import type { AskAnswer, ComposerControl, ConnectionStatus, ContextUsage, Page } from './src/types';
 
 void SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({ duration: 220, fade: true });
@@ -50,16 +54,23 @@ function AppContent() {
   const { effectiveMode, ready: themeReady } = useTheme();
   const commonStyles = useThemedStyles(makeCommonStyles);
   const [page, setPage] = useState<Page>('home');
-  const [credential, setCredential] = useState<PcCredential | null>(null);
+  const [devices, setDevices] = useState<StoredDevice[]>([]);
+  const [activePcId, setActivePcId] = useState<string | null>(null);
   const [client, setClient] = useState<RemoteClient | null>(null);
   const [connection, setConnection] = useState<ConnectionStatus>('disconnected');
   const [bootReady, setBootReady] = useState(false);
-  const [busy, setBusy] = useState(true);
-  const [homeLoading, setHomeLoading] = useState(true);
+  // busy 只用于「点下去要等结果」的跳转（项目/会话列表、配对）；首屏不再阻塞：
+  // 设备列表立刻渲染，当前设备那一行的圆点自己从「正在连接」走到「已连接」
+  const [busy, setBusy] = useState(false);
+  /** 点了一台需要重连的设备：连上后自动进它的会话列表 */
+  const [pendingPcId, setPendingPcId] = useState<string | null>(null);
+  /** 下拉刷新的转圈只由用户手势触发；连接后的自动刷新不共用这个标记，否则一进首页就自己转 */
+  const [pulling, setPulling] = useState(false);
+  const [reloading, setReloading] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [pairCode, setPairCode] = useState('');
   const [error, setError] = useState('');
   const [projects, setProjects] = useState<OpenProject[]>([]);
-  const [homeSessions, setHomeSessions] = useState<HomeSession[]>([]);
   const [project, setProject] = useState<OpenProject | null>(null);
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [session, setSession] = useState<SessionListItem | null>(null);
@@ -68,7 +79,6 @@ function AppContent() {
   const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
   const [models, setModels] = useState<ModelCapabilities | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [composerControl, setComposerControl] = useState<ComposerControl>(null);
   const [renameTitle, setRenameTitle] = useState('');
   const [menuSession, setMenuSession] = useState<SessionListItem | null>(null);
@@ -122,6 +132,9 @@ function AppContent() {
     return () => { shellChunkListeners.current.delete(listener); };
   }, []);
 
+  /** 当前设备：整个会话/项目链路仍只服务这一台，设备列表里的其余设备只展示状态 */
+  const credential = useMemo(() => devices.find((item) => item.pcId === activePcId) ?? null, [activePcId, devices]);
+
   /** 当前会话（未创建的新会话用草稿格）——界面读的就是这一份 */
   const activeSessionId = session?.sessionId ?? DRAFT_SESSION_ID;
   const active = runtime[activeSessionId] ?? EMPTY_RUNTIME;
@@ -147,8 +160,14 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    void loadCredential().then((stored) => { setCredential(stored); setHomeLoading(!!stored); setBusy(false); })
-      .catch((e) => { setHomeLoading(false); setBusy(false); fail(e); })
+    // 只读设备本，不等连接：首帧就是设备列表，连接在后面的 effect 里自己跑
+    void loadDevices().then((book) => {
+      setDevices(book.devices);
+      setActivePcId(book.activePcId);
+      // 与设备本同一次提交里落到「连接中」：否则首帧会先画一帧「未连接」再跳成「正在连接」
+      if (book.activePcId) setConnection('connecting');
+    })
+      .catch(fail)
       .finally(() => setBootReady(true));
   }, [fail]);
 
@@ -157,13 +176,18 @@ function AppContent() {
   }, [bootReady, themeReady]);
 
   useEffect(() => {
-    if (!credential) return;
+    if (!credential) { setClient(null); setConnection('disconnected'); return; }
     const next = new RemoteClient(credential);
     setClient(next);
+    // 先落到「连接中」：换设备时上一台留下的 connected 会让人以为新设备已就绪，
+    // 也会让 pendingPcId 的自动进入提前触发
+    setConnection('connecting');
     const off = next.onStatus(setConnection);
-    void next.connect().catch(fail);
+    // 后台连接：失败不弹窗（电脑关机/不在同一网络都很常见），设备行上的圆点与文案就是结果。
+    // 用户点这台设备时会再试一次，那一次失败才需要说话。
+    void next.connect().catch(() => undefined);
     return () => { off(); next.close(); };
-  }, [credential, fail]);
+  }, [credential]);
 
   const refreshProjects = useCallback(async () => {
     if (!client) return;
@@ -184,23 +208,36 @@ function AppContent() {
     } catch (e) { fail(e); } finally { setBusy(false); }
   }, [client, fail, project]);
 
+  // 项目 id 走 ref：refreshHomeSessions 的身份要稳定，否则 project 一变、连接 effect 就重跑一次
+  const projectIdRef = useRef<string | null>(project?.id ?? null);
+  projectIdRef.current = project?.id ?? null;
+
+  /** 拉「当前项目 + 它的会话」。连上之后、设备页下拉刷新都走它；不负责跳页面 */
   const refreshHomeSessions = useCallback(async () => {
     if (!client) return;
     try {
-      setHomeLoading(true);
       const openProjects = await client.command<OpenProject[]>('project.listOpen');
-      const selected = openProjects.find((item) => item.id === project?.id) ?? openProjects[0] ?? null;
+      const selected = openProjects.find((item) => item.id === projectIdRef.current) ?? openProjects[0] ?? null;
       setProjects(openProjects);
       setProject(selected);
       setSessions(selected ? await client.command<SessionListItem[]>('session.list', { projectId: selected.id }) : []);
-      setHomeSessions([]);
-      setPage('home');
-    } catch (e) { fail(e); } finally { setHomeLoading(false); }
-  }, [client, fail, project?.id]);
+    } catch (e) { fail(e); }
+  }, [client, fail]);
+
+  /** 会话页下拉刷新：只换列表，不切页面、不弹全屏加载 */
+  const reloadSessions = useCallback(async () => {
+    if (!client || !project) return;
+    try {
+      setSessions(await client.command<SessionListItem[]>('session.list', { projectId: project.id }));
+    } catch (e) { fail(e); }
+  }, [client, fail, project]);
 
   useEffect(() => {
-    if (connection === 'connected') void refreshHomeSessions();
-  }, [connection, refreshHomeSessions]);
+    if (connection !== 'connected' || !credential) return;
+    void refreshHomeSessions();
+    // 只落盘、不回写 devices：回写会换掉 credential 的引用，连接 effect 会误以为换了设备而重连
+    void markDeviceConnected(credential.pcId).catch(() => undefined);
+  }, [connection, credential, refreshHomeSessions]);
 
   const streamMessageIds = useRef<Record<string, string | null>>({});
   /** 会话回合是否仍在跑：状态栏清空时据此回落到「正在处理...」（桌面端信号栈的简化版）。
@@ -274,8 +311,9 @@ function AppContent() {
         setPairCode(code);
         setBusy(false);
       });
-      await saveCredential(stored);
-      setPairCode(''); setHomeLoading(true); setCredential(stored);
+      const book = await saveDevice(stored);
+      setDevices(book.devices); setActivePcId(book.activePcId);
+      setPairCode(''); setPage('home');
     } catch (e) { setPairCode(''); fail(e); } finally { setBusy(false); }
   }, [fail]);
 
@@ -283,17 +321,83 @@ function AppContent() {
     setMenuSession(item); setRenameTitle(item.title); setSettingsOpen(true);
   }, []);
 
+  /**
+   * 换设备时清掉所有跟着设备走的视图状态：项目、会话列表、会话运行态缓存、流式 id、回合标记。
+   * 不清的话切回来会先看到上一台的旧消息/旧列表（快照要等下一次打开才覆盖）。
+   */
+  const resetDeviceState = useCallback(() => {
+    setProject(null);
+    setSessions([]);
+    setSession(null);
+    setRuntime({});
+    streamMessageIds.current = {};
+    activeTurn.current = {};
+  }, []);
+
+  /** 打开一台设备：已连接就直接进会话；其余情况切过去并在连上后自动进入 */
+  const openDevice = useCallback(async (device: StoredDevice) => {
+    if (device.pcId === activePcId) {
+      if (connection === 'connected') setPage('sessions');
+      // 正在连：先记下来，连上后自动进入（重复点不会打断握手）
+      else if (connection === 'connecting') setPendingPcId(device.pcId);
+      else void client?.connect().catch(fail);
+      return;
+    }
+    try {
+      setConnection('connecting');
+      // 上一台的项目/会话必须清掉：连上后会立刻进入会话页，留着就是「B 的标题 + A 的列表」，
+      // 点开还会拿 A 的 projectId 去问 B（PC 那边会话不属于该项目 → SESSION_NOT_FOUND）
+      resetDeviceState();
+      const book = await setActiveDevice(device.pcId);
+      setDevices(book.devices);
+      setActivePcId(book.activePcId);
+      setPendingPcId(device.pcId);
+    } catch (e) {
+      // 落盘失败：别把界面留在「正在连接」——那一行会一直转，像卡死
+      setConnection('disconnected');
+      fail(e);
+    }
+  }, [activePcId, client, connection, fail, resetDeviceState]);
+
+  // 切过设备后：连上就自动进入它的会话列表（用户点的是「进这台」，不该让他再点一次）。
+  // 等 project 一起就位再跳：否则会先看到一帧「选择项目」+ 空列表
+  useEffect(() => {
+    if (connection === 'connected' && project && pendingPcId && pendingPcId === activePcId) {
+      setPendingPcId(null);
+      setPage('sessions');
+    }
+  }, [activePcId, connection, pendingPcId, project]);
+
   const forgetPc = useCallback(() => {
-    Alert.alert('移除此电脑？', '手机将删除配对凭证。会话数据从未保存在手机上。', [
+    if (!credential) return;
+    Alert.alert('移除此电脑？', `将删除与「${credential.pcName}」的配对凭证。会话数据从未保存在手机上。`, [
       { text: '取消', style: 'cancel' },
-      { text: '移除', style: 'destructive', onPress: () => void clearCredential().then(() => {
-        client?.close(); setCredential(null); setClient(null); setHomeLoading(false); setAppSettingsOpen(false); setPage('home');
-      }) },
+      { text: '移除', style: 'destructive', onPress: () => void removeDevice(credential.pcId).then((book) => {
+        setDevices(book.devices);
+        setActivePcId(book.activePcId);
+        resetDeviceState();
+        setConnection(book.activePcId ? 'connecting' : 'disconnected');
+        setPage('home');
+        setArchiveOpen(false);
+        // 一台都不剩：把连接彻底收掉（否则会留着一条指向已删设备的 socket）
+        if (!book.activePcId) { client?.close(); setClient(null); setConnection('disconnected'); }
+      }).catch(fail) },
     ]);
-  }, [client]);
+  }, [client, credential, fail, resetDeviceState]);
+
+  /** 归档列表里的「恢复」：取消归档标记后刷新会话列表 */
+  const restoreArchived = useCallback(async (item: SessionListItem): Promise<boolean> => {
+    if (!client || !project) return false;
+    try {
+      await client.command('session.archive', {
+        projectId: project.id, sessionId: item.sessionId, data: { archived: false },
+      });
+      await reloadSessions();
+      return true;
+    } catch (e) { fail(e); return false; }
+  }, [client, fail, project, reloadSessions]);
 
   const goBack = useCallback(() => {
-    if (appSettingsOpen) { setAppSettingsOpen(false); return true; }
     if (settingsOpen) { setSettingsOpen(false); setMenuSession(null); return true; }
     if (page === 'scanner') { setPage('home'); return true; }
     if (page === 'chat') {
@@ -301,10 +405,10 @@ function AppContent() {
       else { setPage('home'); void refreshHomeSessions(); }
       return true;
     }
-    if (page === 'sessions') { setPage('projects'); return true; }
-    if (page === 'projects') { setPage('home'); return true; }
+    // 二级页一律回设备列表：项目列表是从会话页标题进的，因此它也只回设备列表
+    if (page === 'sessions' || page === 'projects' || page === 'settings') { setPage('home'); return true; }
     return false;
-  }, [appSettingsOpen, chatOrigin, page, project, refreshHomeSessions, refreshSessions, settingsOpen]);
+  }, [chatOrigin, page, project, refreshHomeSessions, refreshSessions, settingsOpen]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -359,21 +463,33 @@ function AppContent() {
     permission, permissionLabel, running, session, thinking, thinkingOptions]);
 
   if (!bootReady || !themeReady) return null;
-  if (page === 'scanner') return <SafeAreaProvider><AmbientBackground /><ScannerScreen onCancel={goBack} onScanned={(data) => void handleScan(data)} /></SafeAreaProvider>;
+  if (page === 'scanner') return <SafeAreaProvider>
+    <AmbientBackground />
+    <ScannerScreen onCancel={goBack} onScanned={(data) => void handleScan(data)} />
+  </SafeAreaProvider>;
 
   let content: ReactNode;
   if (busy) content = <LoadingView spinner title="正在加载 EasyMint" />;
   else if (page === 'home') content = <HomeScreen
-    credential={credential} pairCode={pairCode} error={error} homeLoading={homeLoading} connection={connection}
-    project={project} sessions={sessions}
-    onOpenScanner={() => setPage('scanner')} onOpenSettings={() => setAppSettingsOpen(true)}
-    onSwitchProject={() => void refreshProjects()} onRefresh={() => void refreshHomeSessions()}
-    onRetryConnect={() => { void client?.connect().catch(fail); }}
-    onOpenSession={(item) => void actions.openSession(item, project ?? undefined, 'home')}
-    onLongPressSession={openSessionMenu} onNewSession={() => void actions.startNewSession()} />;
+    devices={devices} activePcId={activePcId} connection={connection} refreshing={pulling}
+    pairCode={pairCode} error={error}
+    onRefresh={() => {
+      // 离线时下拉的意图是「再试一次」，不是「再查一次接口」——别让用户吃一张 command 失败弹窗
+      if (connection !== 'connected') { void client?.connect().catch(fail); return; }
+      setPulling(true);
+      void refreshHomeSessions().finally(() => setPulling(false));
+    }}
+    onOpenDevice={(device) => void openDevice(device)}
+    onAddDevice={() => setPage('scanner')}
+    onOpenSettings={() => setPage('settings')} />;
+  else if (page === 'settings') content = <SettingsScreen device={credential} connection={connection}
+    onBack={() => setPage('home')} onRepair={() => setPage('scanner')} onForget={forgetPc} />;
   else if (page === 'projects') content = <ProjectsScreen projects={projects} statusLabel={statusLabel}
     onBack={() => setPage('home')} onOpenProject={(item) => void refreshSessions(item)} />;
   else if (page === 'sessions') content = <SessionsScreen project={project} connection={connection} sessions={sessions}
+    refreshing={reloading}
+    onRefresh={() => { setReloading(true); void reloadSessions().finally(() => setReloading(false)); }}
+    onOpenArchive={() => setArchiveOpen(true)}
     onBack={goBack} onSwitchProject={() => void refreshProjects()} onOpenSession={(item) => void actions.openSession(item)}
     onLongPressSession={openSessionMenu} onNewSession={() => void actions.startNewSession()} />;
   else content = <ChatScreen title={session?.title ?? '新会话'} connection={connection} messages={messages}
@@ -386,7 +502,9 @@ function AppContent() {
     running={running} mintStatus={mintStatus} mintIcon={mintIcon} composer={composer} onBack={goBack} />;
 
   // 状态栏图标明暗跟主题走：深色主题上用浅色图标（PC 亦然）
-  return <SafeAreaProvider><AmbientBackground /><SafeAreaView style={commonStyles.safe} edges={page === 'chat' ? ['bottom', 'left', 'right'] : ['top', 'bottom']}><StatusBar style={effectiveMode === 'dark' ? 'light' : 'dark'} />{content}
+  return <SafeAreaProvider>
+    <AmbientBackground />
+    <SafeAreaView style={commonStyles.safe} edges={page === 'chat' ? ['bottom', 'left', 'right'] : ['top', 'bottom']}><StatusBar style={effectiveMode === 'dark' ? 'light' : 'dark'} />{content}
     <SessionMenuModal visible={settingsOpen} session={menuSession} renameTitle={renameTitle}
       onRenameTitleChange={setRenameTitle}
       onDismiss={() => { setSettingsOpen(false); setMenuSession(null); }}
@@ -398,10 +516,10 @@ function AppContent() {
       shell={viewingShell ? { id: viewingShell.id, command: viewingShell.command, running: backgroundShells.some((item) => item.id === viewingShell.id) } : null}
       loadLog={actions.readShellLog} subscribeChunks={subscribeShellChunks}
       onStop={(shellId) => void actions.stopShell(shellId)} onClose={() => setViewingShell(null)} />
-    <ConnectionSettingsSheet visible={appSettingsOpen} pcName={credential?.pcName ?? '未配对'} statusLabel={statusLabel}
-      onClose={() => setAppSettingsOpen(false)}
-      onRefresh={() => { setAppSettingsOpen(false); void refreshHomeSessions(); }}
-      onRepair={() => { setAppSettingsOpen(false); setPage('scanner'); }}
-      onForget={forgetPc} />
-  </SafeAreaView></SafeAreaProvider>;
+    <ArchiveSheet visible={archiveOpen}
+      sessions={sessions.filter((item) => item.archivedAt)}
+      onClose={() => setArchiveOpen(false)}
+      onRestore={(item) => { void restoreArchived(item).then((ok) => { if (ok) setArchiveOpen(false); }); }} />
+  </SafeAreaView>
+  </SafeAreaProvider>;
 }
