@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { BackgroundAgent, BackgroundShell } from '../protocol/types';
 import type { ThemeColors } from '../theme/tokens';
-import { fontSize, radius, space } from '../theme/tokens';
+import { chatInset, fontSize, radius, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import { SpinIcon, ToolIcon, iconSize } from './icons';
 
@@ -71,7 +71,7 @@ export function BackgroundPills({ shells, agents, onOpenShellOutput, onStopShell
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  backgroundWrap: { marginHorizontal: space.s4, marginTop: space.s1 },
+  backgroundWrap: { marginHorizontal: chatInset, marginTop: space.s1 },
   backgroundBar: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 6 },
   backgroundPill: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.lg, backgroundColor: colors.thinkingBody, flexDirection: 'row', alignItems: 'center', gap: 4 },
   // Shell 胶囊用 success-soft 底 + 绿色文字（PC ShellBar 就是绿底绿字，和 Agent 胶囊区分开）

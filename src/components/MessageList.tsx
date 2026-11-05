@@ -6,7 +6,7 @@ import { describeProcessItem } from '../session/tools';
 import type { DisplayRow } from '../session/turns';
 import { buildRows } from '../session/turns';
 import type { ThemeColors } from '../theme/tokens';
-import { fontSize, radius, space } from '../theme/tokens';
+import { chatInset, fontSize, radius, space } from '../theme/tokens';
 import { useThemedStyles } from '../theme/theme-context';
 import { SystemCard } from './SystemCard';
 import { TurnRow } from './TurnView';
@@ -58,7 +58,11 @@ function needsScroll(text: string): boolean {
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { flex: 1 },
-  content: { padding: 14 },
+  // 左右与状态行/输入卡共用 chatInset（左边界一条线）。
+  // 上下 8 = 桌面端消息滚动容器的 `pb-2`：最后一条消息到状态行的呼吸就是这 8px，
+  // 再叠状态行自己的 26px 高度，状态行与输入卡之间不再要额外边距（桌面端 .input-card 同样没有上边距）。
+  // inverted 列表的 contentContainer 会被整体翻转，上下同值才不受影响。
+  content: { paddingHorizontal: chatInset, paddingVertical: space.s2 },
   /**
    * ⚠ 行与气泡必须显式 flexGrow: 0 / flexShrink: 0 —— 它们是"按内容定高"的，不能参与弹性分配。
    *

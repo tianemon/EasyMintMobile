@@ -12,7 +12,7 @@ import type { BackgroundAgent, BackgroundShell, PendingAsk } from '../protocol/t
 import type { DisplayMessage } from '../session/messages';
 import { makeCommonStyles } from '../theme/commonStyles';
 import type { ThemeColors } from '../theme/tokens';
-import { fontSize, space } from '../theme/tokens';
+import { chatInset, fontSize, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { AskAnswer, ConnectionStatus } from '../types';
 
@@ -69,12 +69,17 @@ function MintStatus({ text, icon }: { text: string; icon?: string }) {
         ? <ToolIcon name={icon} size={14} color={colors.textSecondary} />
         : <ModelGlyph animated size={14} color={colors.textSecondary} />}
     </View>
-    <Text style={styles.mintStatusText}>{text}</Text>
+    {/* 单行截断：命令类状态的文案是整条命令（「正在运行命令 npm run build && …」），
+        不截断会换行成好几行、把底部整条状态行撑高，桌面端 .statusbar 同样是 truncate */}
+    <Text numberOfLines={1} style={styles.mintStatusText}>{text}</Text>
   </View>;
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  mintStatus: { minHeight: 26, marginHorizontal: space.s4, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  // 左右与消息列/输入卡/提问卡共用 chatInset（左边界一条线），内部不再叠 padding：
+  // 桌面端 .statusbar 是 margin: 0 inset 再 padding: 0 s4，手机端没有 avatar 列，图标直接压在这条线上更整齐
+  mintStatus: { minHeight: 26, marginHorizontal: chatInset, flexDirection: 'row', alignItems: 'center', gap: 7 },
   mintStatusGlyph: { width: 16, alignItems: 'center', justifyContent: 'center' },
-  mintStatusText: { color: colors.textSecondary, fontSize: fontSize.caption, fontWeight: '500' },
+  // flexShrink 必须给：Text 在 row 里默认按内容宽度，不给就没法截断（会被父容器裁掉而不是出省略号）
+  mintStatusText: { flexShrink: 1, color: colors.textSecondary, fontSize: fontSize.caption, fontWeight: '500' },
 });

@@ -6,7 +6,7 @@ import type { AttachmentKind, DraftAttachment } from '../session/attachments';
 import { THINKING_LABELS } from '../session/thinking';
 import { makeCommonStyles } from '../theme/commonStyles';
 import type { ThemeColors } from '../theme/tokens';
-import { fontSize, radius, space } from '../theme/tokens';
+import { chatInset, fontSize, radius, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { ComposerControl } from '../types';
 import { AttachmentKindIcon, ComposerIcon, Icon, SendIcon, SpinIcon, iconSize } from './icons';
@@ -175,7 +175,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
 });
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  composerCard: { margin: space.s4, marginTop: 6, marginBottom: 26, padding: space.s1, borderRadius: radius.lg, backgroundColor: colors.elevated },
+  // 左右与消息列/状态行/提问卡同一条线（chatInset）；上边距 0——桌面端 .input-card 也没有上边距，
+  // 与上方内容的呼吸由状态行的 26px 提供，加了反而会在「有状态/无状态」两种情况下跳动
+  composerCard: { marginHorizontal: chatInset, marginTop: 0, marginBottom: 26, padding: space.s1, borderRadius: radius.lg, backgroundColor: colors.elevated },
   compactMask: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: radius.lg, backgroundColor: colors.elevated, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
   compactMaskText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '500' },
   composerInput: { minHeight: 52, maxHeight: 130, paddingHorizontal: space.s3, paddingTop: 10, paddingBottom: 6, color: colors.textPrimary, fontSize: fontSize.base, lineHeight: 22, textAlignVertical: 'top' },
@@ -204,7 +206,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   attachmentOptionText: { color: colors.textPrimary, fontSize: fontSize.xs },
   modelRow: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.elevated, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   selectedRow: { backgroundColor: colors.selectedRowBg, borderWidth: 1, borderColor: colors.selectedRowBorder },
-  attachmentPreview: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.s2, paddingTop: space.s2 },
+  // 左内边距必须与 composerInput 的 paddingHorizontal 同值（s3=12），否则贴图缩略图比上下两行文字左缩进 4px
+  attachmentPreview: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.s3, paddingTop: space.s2 },
   attachmentItem: { width: 58, height: 58, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   attachmentImage: { width: 58, height: 58 },
   attachmentName: { padding: 5, color: colors.textPrimary, fontSize: fontSize.ui11, textAlign: 'center' },

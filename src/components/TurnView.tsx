@@ -171,14 +171,16 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // 这里**不加** paddingBottom——行间距由 MessageList 的行容器统一给，两处都加会变成其它行的两倍。
   row: { flexGrow: 0, flexShrink: 0 },
   timer: { color: colors.textMuted, fontSize: fontSize.caption, fontWeight: '500', marginBottom: 4 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, alignSelf: 'flex-start' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, alignSelf: 'flex-start', maxWidth: '100%' },
   headerLabel: { color: colors.textMuted, fontSize: fontSize.caption },
   // 展开后的过程回放：左侧竖线 + 深一档底，与桌面端 execution-transcript 的层级一致
   transcriptScroll: { flexGrow: 0, flexShrink: 0, maxHeight: TRANSCRIPT_MAX_HEIGHT },
   transcript: { borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: space.s2, marginTop: 2 },
   commentary: { marginBottom: space.s2 },
   process: { marginBottom: 4 },
-  processHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3, alignSelf: 'flex-start' },
+  // maxWidth 必须给：alignSelf: 'flex-start' 的容器按内容定宽，命令摘要很长时拿不到可用宽度，
+  // 单行截断就退化成溢出（文字被画到容器外面）而不是省略号
+  processHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3, alignSelf: 'flex-start', maxWidth: '100%' },
   processLabel: { flexShrink: 1, color: colors.toolTitle, fontSize: fontSize.caption, fontWeight: '600' },
   detail: { marginTop: 2, borderRadius: radius.lg, backgroundColor: colors.thinkingBody, paddingHorizontal: 8, paddingVertical: 6 },
   detailScroll: { flexGrow: 0, flexShrink: 0, maxHeight: DETAIL_MAX_HEIGHT },

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { PendingAsk } from '../protocol/types';
 import type { ThemeColors } from '../theme/tokens';
-import { fontSize, radius, space } from '../theme/tokens';
+import { chatInset, fontSize, radius, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { AskAnswer } from '../types';
 import { ChevronIcon, Icon, iconSize } from './icons';
@@ -171,7 +171,7 @@ export const AskCard = memo(function AskCard({ ask, onSubmit }: AskCardProps) {
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // PC 用毛玻璃（backdrop-blur）；RN 没有等价物，用卡片面 + 描边 + 阴影近似（层次靠色差，同设计语言）
-  card: { marginHorizontal: 10, marginBottom: 6, paddingHorizontal: space.s3, paddingBottom: space.s3, backgroundColor: colors.elevated, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  card: { marginHorizontal: chatInset, marginBottom: 6, paddingHorizontal: space.s3, paddingBottom: space.s3, backgroundColor: colors.elevated, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingTop: 6 },
   navButton: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg },
   navDisabled: { opacity: 0.3 },
