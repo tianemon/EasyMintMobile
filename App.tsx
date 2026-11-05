@@ -199,10 +199,14 @@ function AppContent() {
   }, [connection, refreshHomeSessions]);
 
   const streamMessageIds = useRef<Record<string, string | null>>({});
+  /** 会话回合是否仍在跑：状态栏清空时据此回落到「正在处理…」（桌面端信号栈的简化版）。
+   *  快照路径在 applySnapshot 里同步，流式回合边界由 useRemoteEvents 维护。 */
+  const activeTurn = useRef<Record<string, boolean>>({});
   const applySnapshot = useCallback((sessionId: string, snapshot: SessionSnapshot, duringRequest: unknown[]) => {
     const recovered = snapshotMessagesWithBuffer(snapshot, duringRequest);
     streamMessageIds.current[sessionId] = recovered.messages.find((item) => item.streaming)?.id ?? null;
     const isRunning = recovered.running;
+    activeTurn.current[sessionId] = isRunning;
     const available = snapshot.thinking?.available;
     updateMintStatus(sessionId, isRunning ? '正在处理…' : '');
     patchRuntime(sessionId, {
@@ -227,10 +231,10 @@ function AppContent() {
   // 两个 store 对象只装 useState 的 setter 与 useCallback 包装（标识都稳定），收进 useMemo：
   // 避免每次 App 渲染新建对象 → 下层 hook 的 useCallback 跟着失效 → 输入卡 props 每帧换代。
   const sessionStore = useMemo<SessionActionsStore>(() => ({
-    patchRuntime, migrateRuntime, setMintStatus: updateMintStatus,
+    patchRuntime, migrateRuntime, setMintStatus: updateMintStatus, activeTurn,
     setPage, setProject, setBusy, setChatOrigin, setComposerControl, setSession, setSessions, setDraft, setAttachments,
     setModels, setSettingsOpen, setMenuSession, setRenameTitle,
-  }), [migrateRuntime, patchRuntime, setAttachments, setBusy, setChatOrigin, setComposerControl, setDraft,
+  }), [activeTurn, migrateRuntime, patchRuntime, setAttachments, setBusy, setChatOrigin, setComposerControl, setDraft,
     setMenuSession, setModels, setPage, setProject, setRenameTitle, setSession, setSessions, setSettingsOpen, updateMintStatus]);
 
   const remoteStore = useMemo<RemoteEventsStore>(() => ({
@@ -246,7 +250,7 @@ function AppContent() {
   const submitAsk = useCallback((answers: AskAnswer[] | null) => { void actions.answerAsk(answers); }, [actions.answerAsk]);
 
   useRemoteEvents({
-    client, deviceId: credential?.deviceId, page, project, session, streamMessageIds, refreshHome: refreshHomeSessions,
+    client, deviceId: credential?.deviceId, page, project, session, streamMessageIds, activeTurn, refreshHome: refreshHomeSessions,
     refreshProjects, refreshSessions, store: remoteStore,
   });
 

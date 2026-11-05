@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { DisplayMessage } from '../session/messages';
 import { SYSTEM_LABELS } from '../session/tools';
+import { ALWAYS_EXPANDED_KINDS, authLinkFromRow, RESULT_KINDS, RESULT_ROW_RE, statusTone } from '../session/system-status';
 import type { ThemeColors } from '../theme/tokens';
 import { fontSize, radius, space } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
@@ -16,12 +17,6 @@ const BODY_LINE_HEIGHT = fontSize.body * 1.55;
 const RESULT_BODY_MAX_HEIGHT = BODY_LINE_HEIGHT * 6 + 0.5;
 /** 摘要卡展开限高：PC 的 `calc(16lh + 0.5px)` */
 const SUMMARY_BODY_MAX_HEIGHT = 22 * 16 + 0.5;
-/** 可折叠的指令型系统消息 kind（PC 的 COLLAPSIBLE_SYSTEM_KINDS 同表） */
-const COLLAPSIBLE_KINDS = new Set(['project-created', 'direct-create', 'flow', 'summary', 'learn']);
-/** 人为主动停止的状态词（中止系=琥珀色，失败=红，完成=绿） */
-const STOPPED_STATUSES = new Set(['中止', '已由用户中断', '已由用户中止', '已中止']);
-/** 结果行：⏺ 名称 - 状态 · 时长（分隔符兼容新旧：连字符与破折号） */
-const RESULT_ROW_RE = /^⏺ (.+?) [-—] (完成|失败|中止|已由用户中断|已由用户中止|已中止)(?: · (\d+)s)?$/;
 /** 日志路径行：PC 渲染成可点链接（在文件夹中显示）；手机上无此能力，降级为等宽可复制文本 */
 const LOG_PATH_RE = /^完整输出:\s*(\S.*)$/;
 
@@ -35,10 +30,11 @@ type SystemCardProps = {
  * 系统消息卡：kind 图标 + 标签 + 状态行（状态从正文首个状态行解析），展开看正文。
  *
  * 正文按 kind 分三种（与 PC ChatPanel 同口径）：
- *  - 结果型（delegation / shell）：逐行渲染——⏺ 行拆成 名称/状态/时长 分别着色、首条 ⏺ 行不重复
+ *  - 结果型（delegation / shell / human-action）：逐行渲染——⏺ 行拆成 名称/状态/时长 分别着色、首条 ⏺ 行不重复
  *    （已上标题栏）、`完整输出:` 行走等宽、限高 6 行滚动；
  *  - 摘要（summary）：正文是 markdown，走 MarkdownView，限高 16 行；
  *  - 其余：纯文本原文。
+ * 所有系统 kind 默认折叠（PC `ChatPanel.tsx:3378-3380`）；手机自有的 error/system 是即时提示，保持展开。
  */
 export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -49,17 +45,20 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
   const lines = body.split('\n');
   const firstDotIndex = lines.findIndex((line) => line.startsWith('⏺ '));
   const status = firstDotIndex >= 0 ? lines[firstDotIndex]?.match(RESULT_ROW_RE) : null;
-  const isResult = kind === 'delegation' || kind === 'shell';
+  const isResult = RESULT_KINDS.has(kind);
   const isSummary = kind === 'summary';
-  const collapsible = COLLAPSIBLE_KINDS.has(kind) || isResult;
+  const collapsible = !ALWAYS_EXPANDED_KINDS.has(kind);
   const showBody = (!collapsible || expanded) && !!body;
-  const statusColor = (value: string | undefined): string =>
-    value === '失败' ? colors.danger : value && STOPPED_STATUSES.has(value) ? colors.interrupt : colors.done;
+  const toneColors = { failed: colors.danger, interrupt: colors.interrupt, done: colors.done };
+  const statusColor = (value: string | undefined): string => toneColors[statusTone(value)];
+  // 运行错误：桌面端是红字 alert（ChatPanel 的 error 条目）。手机端整卡一并转红——错误卡混在
+  // 系统消息里若不标色，用户很容易当成又一条普通通知划过去。
+  const isError = kind === 'error';
 
-  return <View style={styles.systemCard}>
+  return <View style={[styles.systemCard, isError && styles.systemCardError]}>
     <Pressable disabled={!collapsible} style={styles.systemHeader} onPress={() => setExpanded((value) => !value)}>
       <SystemKindIcon kind={kind} />
-      <Text style={styles.systemLabel}>{SYSTEM_LABELS[kind] ?? '系统消息'}</Text>
+      <Text style={[styles.systemLabel, isError && { color: colors.danger }]}>{SYSTEM_LABELS[kind] ?? '系统消息'}</Text>
       {!!status && <Text style={[styles.systemStatus, { color: statusColor(status[2]) }]}>· {status[2]}{status[3] ? ` · ${status[3]}s` : ''}</Text>}
       {collapsible && <View style={styles.systemChevron}><ChevronIcon size={iconSize.nav} direction={expanded ? 'down' : 'right'} /></View>}
     </Pressable>
@@ -80,6 +79,15 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
           if (index === firstDotIndex) return null;
           const logPath = LOG_PATH_RE.exec(row);
           if (logPath) return <Text key={index} selectable style={styles.logPath}>{logPath[1]}</Text>;
+          // 「等待你操作」卡里的授权链接：桌面端是可点蓝链，手机端也必须能点开，
+          // 否则这张卡只告诉用户「等人操作」却不给出可操作的入口。
+          const authLink = authLinkFromRow(row);
+          if (authLink) return <Pressable key={index} onPress={() => {
+            // 与 markdown/inline.tsx 的 openLink 同一约定：打不开不静默吞掉，记日志后由用户自行处理。
+            Linking.openURL(authLink.url).catch((error: unknown) => {
+              console.error('[system-card] 打开授权链接失败', authLink.url, error);
+            });
+          }}><Text style={styles.authLink}>{authLink.label}: {authLink.url}</Text></Pressable>;
           const parsed = row.startsWith('⏺ ') ? row.match(RESULT_ROW_RE) : null;
           if (!parsed) return row.trim() === '' ? null : <Text key={index} selectable style={styles.bodyLine}>{row}</Text>;
           const color = statusColor(parsed[2]);
@@ -105,7 +113,7 @@ export function SystemCard({ message, onInnerScrollGesture }: SystemCardProps) {
         >
           <MarkdownView text={body} />
         </ScrollView>
-        : <Text selectable style={styles.systemBody}>{body}</Text>)}
+        : <Text selectable style={[styles.systemBody, isError && { color: colors.danger }]}>{body}</Text>)}
   </View>;
 }
 
@@ -113,6 +121,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // 左侧系统卡片，与 assistant 气泡左对齐（PC 是 padding 32 + 头像占位 40 后对齐内容列；手机无头像列，
   // 所以不能缩进——早先的 marginLeft 54 会把卡片从左侧推开，展开后更是一路撑到右侧，看着像跑到用户侧了）
   systemCard: { maxWidth: '82%', alignSelf: 'flex-start', borderRadius: radius.lg, borderBottomLeftRadius: 4, backgroundColor: colors.card, overflow: 'hidden' },
+  systemCardError: { backgroundColor: colors.dangerBg },
   systemHeader: { minHeight: 36, paddingHorizontal: space.s3, flexDirection: 'row', alignItems: 'center', gap: 6 },
   systemLabel: { color: colors.systemLabel, fontSize: fontSize.caption, fontWeight: '600' },
   systemStatus: { fontSize: fontSize.caption, fontWeight: '600' },
@@ -129,4 +138,5 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   resultDuration: { color: colors.textMuted, fontSize: fontSize.caption },
   // 日志路径行：手机不能「在文件夹中显示」，降级为等宽可复制文本（与 PC 的信息量一致：完整日志在电脑上）
   logPath: { color: colors.info, fontFamily: monoFont, fontSize: fontSize.caption, paddingVertical: 2 },
+  authLink: { color: colors.info, fontSize: fontSize.body, lineHeight: BODY_LINE_HEIGHT, paddingVertical: 2, textDecorationLine: 'underline' },
 });

@@ -5,6 +5,7 @@ import type {
   RemoteEnvelope,
   RemoteEvent,
 } from '../protocol/types';
+import { resultError } from './remote-result';
 import {
   base64,
   computeSharedSecret,
@@ -271,9 +272,10 @@ export class RemoteClient {
         if (!pending) return;
         this.pending.delete(envelope.requestId);
         clearTimeout(pending.timer);
-        const payload = envelope.payload as { ok?: boolean; data?: unknown; error?: { message?: string } };
-        if (payload.ok) pending.resolve(payload.data);
-        else pending.reject(new Error(payload.error?.message || '命令执行失败'));
+        const payload = envelope.payload as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string } };
+        const error = resultError(payload);
+        if (error) pending.reject(error);
+        else pending.resolve(payload.data);
       } else if (envelope.kind === 'event') {
         const payload = envelope.payload as RemoteEvent;
         if (payload && typeof payload.channel === 'string') {

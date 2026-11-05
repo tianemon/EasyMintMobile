@@ -5,12 +5,14 @@ import type {
   BackgroundAgent, BackgroundShell, OpenProject, PendingAsk, RemoteEvent, SessionListItem,
 } from '../protocol/types';
 import type { Page } from '../types';
-import { contentBlocks, contentText, markToolDone, object, prependMessage, upsertMessage } from './messages';
-import type { DisplayMessage } from './messages';
+import { contentBlocks, contentText, eventTimestamp, insertMessageByTime, markToolDone, nestedCalls, object, PERMISSION_MARKER, prependMessage, presentationFrom, toolPresentation, upsertMessage } from './messages';
+import type { DisplayAttachment, DisplayUsage } from './messages';
 import type { PatchRuntime } from './runtime';
 import { createStreamFrameQueue, scheduleOnNextFrame } from './stream-frames';
+import { resolveSettingsRevision } from './settings-revision';
+import { droppedSteerText, resolveStatusHint, streamStatusHint, streamSystemNotice } from './status-hints';
 import { THINKING_ORDER } from './thinking';
-import { toolStatus } from './tools';
+import { toolStatusTargeted } from './tools';
 
 /**
  * 事件归并要写入的状态。
@@ -38,6 +40,8 @@ export type RemoteEventsOptions = {
   /** 当前显示的会话：重活（正文帧/工具帧）只给它做 */
   session: SessionListItem | null;
   streamMessageIds: RefObject<Record<string, string | null>>;
+  /** 回合是否仍在跑（与 App.tsx 的 applySnapshot 共享）：状态栏清空时据此回落，见 status-hints.ts */
+  activeTurn: RefObject<Record<string, boolean>>;
   refreshHome: () => void;
   refreshProjects: () => void;
   refreshSessions: (project: OpenProject) => void;
@@ -50,7 +54,7 @@ export type RemoteEventsOptions = {
  * 中间帧先按下一帧边界合并，见 stream-frames.ts。
  */
 export function useRemoteEvents(options: RemoteEventsOptions): void {
-  const { client, deviceId, page, project, session, streamMessageIds, refreshHome, refreshProjects, refreshSessions, store } = options;
+  const { client, deviceId, page, project, session, streamMessageIds, activeTurn, refreshHome, refreshProjects, refreshSessions, store } = options;
 
   /**
    * 当前显示什么（会话 / 页面 / 项目）。
@@ -62,6 +66,9 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
   const viewRef = useRef<{ sessionId: string | null; page: Page; projectId: string | null }>({
     sessionId: session?.sessionId ?? null, page, projectId: project?.id ?? null,
   });
+
+  /** 设置回写的 revision 游标（口径与边界见 settings-revision.ts）。按会话记住已应用的最大值。 */
+  const settingsRevision = useRef<Record<string, number>>({});
 
   useLayoutEffect(() => {
     viewRef.current = { sessionId: session?.sessionId ?? null, page, projectId: project?.id ?? null };
@@ -78,7 +85,24 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       const id = streamMessageIds.current[sessionId] ?? `stream-${String(data.runId ?? 'run')}-${Date.now()}`;
       streamMessageIds.current[sessionId] = id;
       store.setMintStatus(sessionId, streaming && blocks[blocks.length - 1]?.kind === 'thinking' ? '正在思考…' : '');
-      store.patchRuntime(sessionId, (current) => ({ messages: upsertMessage(current.messages, { id, role: 'assistant', blocks, streaming }) }));
+      // 终帧（partial === false）带 usage / durationMs / stopReason（桌面端 event-bridge.ts:352-353）：
+      // 缺了它们，实时会话里既没有「用时」也判不出回合边界，只有重开会话走快照才补齐。
+      const rawUsage = object(data.usage);
+      const usage: DisplayUsage | undefined = Object.keys(rawUsage).length ? {
+        inputTokens: Number(rawUsage.inputTokens ?? 0),
+        outputTokens: Number(rawUsage.outputTokens ?? 0),
+        cacheReadTokens: Number(rawUsage.cacheReadTokens ?? 0),
+        cacheWriteTokens: Number(rawUsage.cacheWriteTokens ?? 0),
+      } : undefined;
+      store.patchRuntime(sessionId, (current) => ({
+        messages: upsertMessage(current.messages, {
+          id, role: 'assistant', blocks, streaming,
+          ...(usage ? { usage } : {}),
+          ...(typeof data.durationMs === 'number' && Number.isFinite(data.durationMs) ? { durationMs: data.durationMs } : {}),
+          ...(typeof data.stopReason === 'string' ? { stopReason: data.stopReason } : {}),
+          ...(typeof data.timestamp === 'number' ? { createdAt: data.timestamp } : {}),
+        }),
+      }));
     };
 
     // 中间帧只在下一帧边界应用最后一帧（累计全文快照语义，中间态必被覆盖）。
@@ -114,6 +138,7 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
 
       if (event.channel === 'agent:exit') {
         frames.flush();
+        activeTurn.current[sessionId] = false;
         store.setMintStatus(sessionId, '');
         streamMessageIds.current[sessionId] = null;
         store.patchRuntime(sessionId, (current) => ({
@@ -181,6 +206,9 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         return;
       }
       if (event.channel === 'agent:remote-settings-changed') {
+        const decision = resolveSettingsRevision(settingsRevision.current[sessionId], Number(data.revision));
+        if (decision.stale) return;
+        settingsRevision.current[sessionId] = decision.cursor;
         // 供应商恒为桌面端的全局当前供应商（2026-10-29 起协议不再下发 provider），这里只跟随模型
         store.patchRuntime(sessionId, {
           ...(typeof data.model === 'string' ? { model: data.model } : {}),
@@ -189,6 +217,24 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         });
         return;
       }
+      if (event.channel === 'agent:model-changed') {
+        // 会话内切模型 / 恢复会话时桌面端单独广播（agent-service.ts:2058/2185/2917），
+        // 载荷只有 model/provider/sessionId，**没有 revision**，所以不进上面的版本门
+        // （纳进去会被全部丢弃）。同一条 WebSocket 有序投递，按到达顺序覆盖即可；
+        // 版本门只拦同通道的近距重放，不会反过来把这里的新值改回旧值。
+        // 与 remote-settings-changed 可能重复，按 model 幂等覆盖即可。
+        if (typeof data.model === 'string') store.patchRuntime(sessionId, { model: data.model });
+        return;
+      }
+      if (event.channel === 'agent:context-summarizing') {
+        // type: 'compact' = 开始压缩，'done' = 结束；只走状态栏，不进消息流（PC 同口径）
+        store.setMintStatus(sessionId, data.type === 'done' ? '' : '正在整理上下文…');
+        return;
+      }
+      // chat-session / chat-closed 是桌面端 Pi 内部 chat 的生命周期（chatId / tabId），
+      // 手机端状态格按 sessionId 组织、不维护 chatId；且 chat-session 的本机 projectPath 已被 PC 剔除。
+      // 明确忽略：不要据此清 running（关 chat ≠ 停会话），也别让后来人以为漏了白名单事件。
+      if (event.channel === 'agent:chat-session' || event.channel === 'agent:chat-closed') return;
       if (event.channel === 'agent:thinking-level-changed') {
         const available = Array.isArray(data.available) ? data.available.filter((level): level is string => typeof level === 'string') : null;
         store.patchRuntime(sessionId, {
@@ -210,11 +256,48 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       }
       // 其余流式事件都是边界/终态信号，不可被窗口吞掉：先把待应用帧落地，保证应用顺序 = 到达顺序
       frames.flush();
+      // 状态类帧（压缩 / 重试 / 等待输入）：只改状态栏。compacted 不在其中——它带摘要正文，
+      // 由下面的 streamSystemNotice 落成系统消息；返回 null 的帧一律继续往下走，不吞业务帧。
+      const hint = streamStatusHint(String(type), data);
+      if (hint !== null) {
+        store.setMintStatus(sessionId, resolveStatusHint(activeTurn.current[sessionId] ?? false, hint));
+        return;
+      }
+      // 压缩摘要卡 / custom 系统消息：桌面端 ChatPanel.tsx:1822 走同一条插入路径。
+      // 手机端单视图，不做桌面端那种多 tab 去重；无 text 的帧在此返回 null，不插空气泡。
+      const notice = streamSystemNotice(String(type), data);
+      if (notice) {
+        // 桌面端按 Pi 落盘时间戳有序插入（chat-store.ts:247-258：广播顺序 ≠ 落盘顺序），
+        // 手机端同样带上时间戳交给 insertMessageByTime，不再一律头插。
+        const createdAt = eventTimestamp(data, envelope.sentAt);
+        // id 在 updater 外算好：React 可能重复调用 updater，在里面取时间戳会得到不同 id
+        const id = `system-${createdAt}-${Math.random().toString(36).slice(2)}`;
+        store.patchRuntime(sessionId, (current) => ({
+          messages: insertMessageByTime(current.messages, {
+            id, role: 'system', text: notice.text, systemKind: notice.systemKind, createdAt,
+          }),
+        }));
+        return;
+      }
+      if (type === 'queue_dropped') {
+        const text = droppedSteerText(data.queueDropped);
+        const createdAt = eventTimestamp(data, envelope.sentAt);
+        if (text) store.patchRuntime(sessionId, (current) => ({
+          // id 在 updater 外算好：React 可能重复调用 updater，在里面取时间戳会得到不同 id
+          messages: insertMessageByTime(current.messages, {
+            id: `dropped-${createdAt}-${Math.random().toString(36).slice(2)}`,
+            role: 'system', text, systemKind: 'system', createdAt,
+          }),
+        }));
+        return;
+      }
       if (type === 'turn_start') {
+        activeTurn.current[sessionId] = true;
         streamMessageIds.current[sessionId] = null;
         store.patchRuntime(sessionId, { running: true });
         store.setMintStatus(sessionId, '等待模型响应…');
       } else if (type === 'turn_end' || type === 'error') {
+        activeTurn.current[sessionId] = false;
         streamMessageIds.current[sessionId] = null;
         store.setMintStatus(sessionId, '');
         store.patchRuntime(sessionId, (current) => ({
@@ -226,11 +309,24 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
             : current.messages.map((item) => item.streaming ? { ...item, streaming: false } : item),
         }));
       } else if (type === 'user_message' && typeof data.text === 'string') {
-        if (object(data.details).sourceDeviceId === deviceId) return;
-        const id = String(object(data.details).messageId ?? `user-${Date.now()}`);
+        const details = object(data.details);
+        if (details.sourceDeviceId === deviceId) return;
+        const id = String(details.messageId ?? `user-${Date.now()}`);
+        // 桌面端广播带 details.attachments（remote-command-router.ts:151 的 name/kind），
+        // 之前只插 text → 别的终端发的附件在手机上一片空白。历史事件没有像素数据，退成占位卡。
+        const declared = Array.isArray(details.attachments) ? details.attachments : [];
+        const attachments: DisplayAttachment[] = declared.map((item, index) => {
+          const row = object(item);
+          return { id: `${id}-${index}`, name: String(row.name ?? `附件 ${index + 1}`),
+            kind: row.kind === 'image' ? 'image' : 'doc' };
+        });
+        const createdAt = eventTimestamp(data, envelope.sentAt);
         store.patchRuntime(sessionId, (current) => ({
           messages: current.messages.some((item) => item.id === id)
-            ? current.messages : prependMessage(current.messages, { id, role: 'user', text: data.text as string }),
+            ? current.messages : insertMessageByTime(current.messages, {
+              id, role: 'user', text: data.text as string, createdAt,
+              ...(attachments.length ? { attachments } : {}),
+            }),
         }));
       } else if (type === 'message_start') {
         streamMessageIds.current[sessionId] = null;
@@ -238,14 +334,11 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       } else if (type === 'message') {
         // partial === false 的结束帧：立即应用，这就是最终内容
         applyStreamMessage(sessionId, data, false);
-      } else if (type === 'custom_event' && typeof data.text === 'string') {
-        store.patchRuntime(sessionId, (current) => ({
-          messages: prependMessage(current.messages, { id: `system-${Date.now()}`, role: 'system', text: data.text as string,
-            systemKind: String(object(data.details).kind ?? 'system') }),
-        }));
       } else if (type === 'tool_progress') {
         const name = String(data.toolName ?? '工具调用');
-        store.setMintStatus(sessionId, toolStatus(name));
+        const toolArgs = object(data.toolArgs);
+        // 状态栏带目标（「正在读取 app.ts」）——桌面端 StatusBar 的 toolActivity 文案同源
+        store.setMintStatus(sessionId, toolStatusTargeted(name, Object.keys(toolArgs).length ? toolArgs : undefined));
         const toolId = String(data.toolCallId ?? name);
         // id 在 updater 外算好：updater 可能被 React 重复调用，在里面取 Date.now() 会得到不同的 id
         const messageId = streamMessageIds.current[sessionId] ?? `stream-${String(data.runId ?? 'run')}-${Date.now()}`;
@@ -254,16 +347,18 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
           const delta = typeof data.deltaText === 'string' ? data.deltaText : '';
           const index = current.messages.findIndex((item) => item.id === messageId);
           if (index < 0) {
-            return { messages: prependMessage(current.messages, { id: messageId, role: 'assistant', streaming: true, blocks: [{ kind: 'tool', id: toolId, name, output: delta, state: 'running' }] }) };
+            return { messages: prependMessage(current.messages, { id: messageId, role: 'assistant', streaming: true,
+              blocks: [{ kind: 'tool', id: toolId, name, input: toolArgs, output: delta, state: 'running' }] }) };
           }
           return { messages: current.messages.map((item, i) => {
             if (i !== index) return item;
             const blocks = [...(item.blocks ?? [])];
             const toolIndex = blocks.findIndex((block) => block.kind === 'tool' && block.id === toolId);
-            if (toolIndex < 0) blocks.push({ kind: 'tool', id: toolId, name, output: delta, state: 'running' });
+            if (toolIndex < 0) blocks.push({ kind: 'tool', id: toolId, name, input: toolArgs, output: delta, state: 'running' });
             else {
               const tool = blocks[toolIndex];
-              if (tool?.kind === 'tool') blocks[toolIndex] = { ...tool, output: `${tool.output}${delta}`.slice(-12_000), state: 'running' };
+              // input 只增不改：tool_progress 是增量帧，某些工具首个增量里才带全参数
+              if (tool?.kind === 'tool') blocks[toolIndex] = { ...tool, input: Object.keys(toolArgs).length ? toolArgs : tool.input, output: `${tool.output}${delta}`.slice(-12_000), state: 'running' };
             }
             return { ...item, blocks, streaming: true };
           }) };
@@ -276,22 +371,42 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         store.setMintStatus(sessionId, '正在处理…');
         const name = String(data.toolName ?? '工具调用');
         const toolId = String(data.toolCallId ?? name);
-        const output = contentText(data.content);
+        const rawOutput = contentText(data.content);
+        // 桌面端 event-bridge.ts:288-306 的载荷：presentation 已在 PC 侧解好（edit_diff / permission_denied），
+        // 拿不到时按正文标记再解一次（老版本桌面端只带 content）。
+        const presentation = presentationFrom(data.presentation)
+          ?? toolPresentation(rawOutput, undefined, data.isError === true);
+        // 权限信封那行是给 PC 解析用的内部标记，剥掉再进正文（桌面端 toolResultForUi 同款）
+        const output = presentation?.kind === 'permission_denied' && rawOutput.startsWith(PERMISSION_MARKER)
+          ? rawOutput.slice(rawOutput.indexOf('\n') + 1) : rawOutput;
+        const nested = nestedCalls(data.nestedCalls);
+        const durationMs = typeof data.durationMs === 'number' && Number.isFinite(data.durationMs) ? data.durationMs : undefined;
+        const imagePath = typeof data.imagePath === 'string' ? data.imagePath : undefined;
         // 同 tool_progress：id 在 updater 外算好
         const messageId = streamMessageIds.current[sessionId] ?? `stream-${String(data.runId ?? 'run')}-${Date.now()}`;
         streamMessageIds.current[sessionId] = messageId;
         store.patchRuntime(sessionId, (current) => {
           const index = current.messages.findIndex((item) => item.id === messageId);
           const state = data.isError ? 'error' as const : 'done' as const;
+          const extras = {
+            ...(presentation ? { presentation } : {}),
+            ...(nested ? { nested } : {}),
+            ...(durationMs !== undefined ? { durationMs } : {}),
+            ...(imagePath ? { imagePath } : {}),
+          };
           if (index < 0) {
-            return { messages: prependMessage(current.messages, { id: messageId, role: 'assistant', streaming: true, blocks: [{ kind: 'tool', id: toolId, name, output, state }] }) };
+            return { messages: prependMessage(current.messages, { id: messageId, role: 'assistant', streaming: true,
+              blocks: [{ kind: 'tool', id: toolId, name, output, state, ...extras }] }) };
           }
           return { messages: current.messages.map((item, i) => {
             if (i !== index) return item;
             const blocks = [...(item.blocks ?? [])];
             const toolIndex = blocks.findIndex((block) => block.kind === 'tool' && block.id === toolId);
-            if (toolIndex < 0) blocks.push({ kind: 'tool', id: toolId, name, output, state });
-            else { const tool = blocks[toolIndex]; if (tool?.kind === 'tool') blocks[toolIndex] = { ...tool, name, output: output || tool.output, state }; }
+            if (toolIndex < 0) blocks.push({ kind: 'tool', id: toolId, name, output, state, ...extras });
+            else {
+              const tool = blocks[toolIndex];
+              if (tool?.kind === 'tool') blocks[toolIndex] = { ...tool, name, output: output || tool.output, state, ...extras };
+            }
             return { ...item, blocks, streaming: true };
           }) };
         });

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { Alert } from 'react-native';
 import type { RemoteClient } from '../connection/remote-client';
 import type {
@@ -21,6 +21,8 @@ export type SessionActionsStore = {
   migrateRuntime: (from: string, to: string) => void;
   /** 状态文案（按会话去重） */
   setMintStatus: (sessionId: string, value: string) => void;
+  /** 回合标记：与 useRemoteEvents / applySnapshot 共享，清空状态栏时据此回落到「正在处理…」 */
+  activeTurn: RefObject<Record<string, boolean>>;
   setPage: (page: Page) => void;
   setProject: (project: OpenProject | null) => void;
   setBusy: (value: boolean) => void;
@@ -104,6 +106,7 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
       // 先把该会话**自己的格**清成空：不残留上次打开它时的消息/运行态/提问卡。
       // 清的是它自己，别的会话的格不动——这正是「每会话一份」的意义。
       store.setMintStatus(sessionId, '');
+      store.activeTurn.current[sessionId] = false;
       store.patchRuntime(sessionId, {
         messages: [], running: false, pendingAsk: null,
         backgroundShells: [], backgroundAgents: [], contextUsage: { percent: null },
@@ -152,8 +155,13 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     store.setDraft('');
     store.setAttachments([]);
     store.setMintStatus(sessionId, '等待模型响应…');
+    store.activeTurn.current[sessionId] = true;
     store.patchRuntime(sessionId, (current) => ({
-      messages: prependMessage(current.messages, { id: `local-${Date.now()}`, role: 'user', text, attachments: outgoingAttachments }),
+      // sentAt：本地回显拿不到 PC 时间戳（桌面端不会再把它广播回来），但回合「用时」要算上
+      // 等待模型响应的那一段，所以用本机时钟做走秒锚点。它不参与 insertMessageByTime 的跨机排序。
+      messages: prependMessage(current.messages, {
+        id: `local-${Date.now()}`, role: 'user', text, attachments: outgoingAttachments, sentAt: Date.now(),
+      }),
     }));
     try {
       const remoteAttachments = outgoingAttachments.map(({ name, kind, mimeType, data }) => ({ name, kind, mimeType, data }));
@@ -172,8 +180,12 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
           store.setSessions((current) => current.some((item) => item.sessionId === result.sessionId) ? current : [created, ...current]);
         }
         store.patchRuntime(result.sessionId, { running: true });
+        store.activeTurn.current[result.sessionId] = true;
       }
-    } catch (e) { store.setMintStatus(sessionId, ''); fail(e); }
+    } catch (e) {
+      store.activeTurn.current[sessionId] = false;
+      store.setMintStatus(sessionId, ''); fail(e);
+    }
   }, [attachments, client, draft, fail, model, permission, project, running, session, store, thinking]);
 
   const stop = useCallback(async () => {
@@ -181,8 +193,16 @@ export function useSessionActions(options: SessionActionsOptions): SessionAction
     try {
       await client.command('session.abort', { projectId: project.id, sessionId: session.sessionId });
       store.setMintStatus(session.sessionId, '');
+      store.activeTurn.current[session.sessionId] = false;
       store.patchRuntime(session.sessionId, { running: false });
-    } catch (e) { fail(e); }
+    } catch (e) {
+      // 桌面端在 SDK 停止超时会抛 ABORT_TIMEOUT（remote-command-router.ts 的 session.abort）。
+      // 那不是「操作失败」而是「尚未确认停止」：会话可能仍在跑，保持 running、状态栏给可重试提示，
+      // 不弹错误框。await 抛错时上面的 running:false 本就不会执行，这里不要再补一次。
+      if ((e as { code?: string }).code === 'ABORT_TIMEOUT') {
+        store.setMintStatus(session.sessionId, '停止未确认，请稍后重试');
+      } else fail(e);
+    }
   }, [client, fail, project, session, store]);
 
   /**
