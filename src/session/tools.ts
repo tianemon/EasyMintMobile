@@ -107,7 +107,14 @@ export function toolDescription(input: Record<string, unknown> | undefined): str
   return typeof value === 'string' ? value.trim() : '';
 }
 
-/** 系统消息 kind → 标签（与电脑端 customType 语义对应） */
+/**
+ * 系统消息 kind → 标签（与桌面端 customType 语义对应）。
+ *
+ * 这张表同时承担**历史数据**的显示：老会话里存在的 kind 即使今天不再产出，也要能显示成人话。
+ * `handoff`（会话交接）就是这种——它来自已取消的「上下文轮转」（桌面端 2026-08-15 提交 46a111b1
+ * 删除 rotation.ts，随后连标签映射一起清掉，只保留旧消息显示兼容）。手机端别跟着删：
+ * 桌面端那边删的是**产出与映射**，手机端这里删掉，历史消息就会退化成「系统消息」。
+ */
 export const SYSTEM_LABELS: Record<string, string> = {
   delegation: 'SubAgent', shell: '后台命令', 'human-action': '命令交互', 'project-created': '项目初始化',
   'direct-create': '直接创建', flow: '流程指令', handoff: '会话交接',
