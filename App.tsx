@@ -21,6 +21,7 @@ import { SessionMenuModal } from './src/screens/SessionMenuModal';
 import { SessionsScreen } from './src/screens/SessionsScreen';
 import { ShellOutputSheet } from './src/screens/ShellOutputSheet';
 import { clearCredential, loadCredential, saveCredential } from './src/security/credential-store';
+import { endCompacting } from './src/session/compacting';
 import { snapshotMessagesWithBuffer } from './src/session/messages';
 import type { DisplayMessage } from './src/session/messages';
 import { DRAFT_SESSION_ID, EMPTY_RUNTIME } from './src/session/runtime';
@@ -213,6 +214,9 @@ function AppContent() {
     // 与桌面端一致：快照本身不产生状态信号（StatusBar 此时无文本，整条不显示），
     // 下一个事件（tool_progress / 流式帧）才会把状态行带出来。这里只清掉上一个会话的残留。
     updateMintStatus(sessionId, '');
+    // 压缩态连同它的超时兜底一起撤掉：只把 runtime 置 false 不够，挂着的定时器还会在 120s 后
+    // 补一条「压缩状态异常」的假提示
+    endCompacting(sessionId);
     patchRuntime(sessionId, {
       // snapshotMessages 已按列表顺序返回（最新在前）
       messages: recovered.messages,

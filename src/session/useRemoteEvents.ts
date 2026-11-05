@@ -8,6 +8,7 @@ import type { Page } from '../types';
 import { contentBlocks, contentText, eventTimestamp, insertMessageByTime, markToolDone, nestedCalls, object, PERMISSION_MARKER, prependMessage, presentationFrom, toolPresentation, upsertMessage } from './messages';
 import type { DisplayAttachment, DisplayUsage } from './messages';
 import { classifyApiError } from './api-errors';
+import { beginCompacting, clearAllCompacting, endCompacting } from './compacting';
 import type { PatchRuntime } from './runtime';
 import { createStreamFrameQueue, scheduleOnNextFrame } from './stream-frames';
 import { resolveSettingsRevision } from './settings-revision';
@@ -77,6 +78,28 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
 
   useEffect(() => {
     if (!client) return;
+
+    /**
+     * 压缩开始：置位 + 挂 120s 兜底（桌面端 ChatPanel.tsx:2053-2067 同款）。
+     * SDK 挂起时 `done` 不会到达，没有兜底输入卡片会一直蒙着，用户以为卡死。
+     */
+    const startCompacting = (sessionId: string): void => {
+      store.patchRuntime(sessionId, { compacting: true });
+      beginCompacting(sessionId, () => {
+        store.patchRuntime(sessionId, (current) => ({
+          compacting: false,
+          // 与桌面端同口径：只恢复界面，不中断后台压缩；这条提示是为了让「刚才为什么打不了字」有交代
+          messages: insertMessageByTime(current.messages, {
+            id: `compact-timeout-${Date.now()}`, role: 'system', systemKind: 'system',
+            text: '压缩状态异常，已恢复界面（压缩可能仍在后台）',
+          }),
+        }));
+      });
+    };
+    const stopCompacting = (sessionId: string): void => {
+      endCompacting(sessionId);
+      store.patchRuntime(sessionId, { compacting: false });
+    };
 
     /** 应用一帧流式快照：message_start 与 message 共用（streaming 决定「还在流式」标记） */
     const applyStreamMessage = (sessionId: string, data: Record<string, unknown>, streaming: boolean): void => {
@@ -236,11 +259,16 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
         return;
       }
       if (event.channel === 'agent:context-summarizing') {
-        // type: 'compact' = 开始压缩，'done' = 结束；状态栏 + 输入卡片的蒙版都跟着走（PC 同口径）。
-        // 结束时要按运行态回落：回合还在跑就回「正在处理...」，否则清空——
-        // 直接置空会把状态栏抹掉，用户会以为已经停了（桌面端是 pop 信号后回落到次新信号）。
-        const compacting = data.type !== 'done';
-        store.patchRuntime(sessionId, { compacting });
+        // type 只有两种：'compact' = 开始压缩，'done' = 结束（agent-service.ts:2825 / 2902）。
+        // 状态栏 + 输入卡片的蒙版都跟着走（PC 同口径）。结束时要按运行态回落：
+        // 回合还在跑就回「正在处理...」，否则清空——直接置空会把状态栏抹掉，
+        // 用户会以为已经停了（桌面端是 pop 信号后回落到次新信号）。
+        //
+        // 只认 'compact' 而不是「非 done」：桌面端曾有第三种 'summary'（轮转总结并开新会话），
+        // 该链路已于 2026-08-15 取消（提交 46a111b1 删除 rotation.ts），主进程不再广播；
+        // 万一老版本桌面端还发，也不该把手机端输入卡片蒙成「正在整理上下文」。
+        const compacting = data.type === 'compact';
+        if (compacting) startCompacting(sessionId); else stopCompacting(sessionId);
         store.setMintStatus(sessionId, compacting
           ? COMPACTING_HINT : resolveStatusHint(activeTurn.current[sessionId] ?? false, ''));
         return;
@@ -274,9 +302,8 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       // 由下面的 streamSystemNotice 落成系统消息；返回 null 的帧一律继续往下走，不吞业务帧。
       // 压缩的开始/结束还要切换**输入卡片**的蒙版（桌面端 inputDisabled = compacting）：
       // 这一段不走流式正文，光靠状态栏文案不够——输入框仍可打字发送，等 PC 拒绝才知道不行。
-      if (type === 'compacting' || type === 'compaction_finished') {
-        store.patchRuntime(sessionId, { compacting: type === 'compacting' });
-      }
+      if (type === 'compacting') startCompacting(sessionId);
+      else if (type === 'compaction_finished') stopCompacting(sessionId);
       const hint = streamStatusHint(String(type), data);
       if (hint !== null) {
         store.setMintStatus(sessionId, resolveStatusHint(activeTurn.current[sessionId] ?? false, hint));
@@ -444,6 +471,8 @@ export function useRemoteEvents(options: RemoteEventsOptions): void {
       off();
       // 订阅重建/卸载时丢弃待应用帧，避免把上一个会话的帧写进新会话（后续帧仍是全量快照，内容会收敛）
       frames.clear();
+      // 压缩超时兜底定时器一并撤掉，别在组件消失后还回调（否则会往已卸载的会话格写消息）
+      clearAllCompacting();
     };
     // setter 由 useState 提供、标识稳定，无需进依赖；store 对象每次渲染都是新引用，故按字段解构传递。
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -10,6 +10,7 @@ import { resolveSettingsRevision, SETTINGS_REPLAY_WINDOW_MS } from '../src/sessi
 import { toolDisplay, toolLabel, toolStatus } from '../src/session/tools.ts';
 import { resultError } from '../src/connection/remote-result.ts';
 import { classifyApiError } from '../src/session/api-errors.ts';
+import { beginCompacting, clearAllCompacting, endCompacting, isCompacting } from '../src/session/compacting.ts';
 import { toolActivityIcon } from '../src/session/tools.ts';
 
 test('压缩类帧映射到状态栏文案，结束帧清空', () => {
@@ -187,4 +188,24 @@ test('状态行图标只由工具名决定（工具进行中要把 Mint 图标�
   assert.equal(toolActivityIcon('grep'), 'grep');
   assert.equal(toolActivityIcon('web_search'), 'web_search');
   assert.equal(toolActivityIcon('mcp__srv__tool'), 'call_mcp_tool');
+});
+
+test('压缩态超时兜底：到点才回调，正常结束/快照重置后不再回调', async () => {
+  // 桌面端为「蒙版卡死」做过 4 层防御（CHANGELOG v0.9.3），手机端这层是同一个 120s 安全网
+  let timedOut = 0;
+  beginCompacting('s-timeout', () => { timedOut += 1; }, 5);
+  assert.equal(isCompacting('s-timeout'), true);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(timedOut, 1, '超时应回调一次');
+  assert.equal(isCompacting('s-timeout'), false, '超时后标记要撤掉，否则界面仍当在压缩');
+
+  // 正常结束（收到 done 或打开快照重置）：定时器撤掉，不能再补一张「压缩状态异常」的假卡片
+  let late = 0;
+  beginCompacting('s-done', () => { late += 1; }, 5);
+  endCompacting('s-done');
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(late, 0);
+  assert.equal(isCompacting('s-done'), false);
+
+  clearAllCompacting();
 });
