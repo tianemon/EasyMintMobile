@@ -9,6 +9,8 @@ import { LoadingView } from './src/components/LoadingView';
 import type { ComposerProps } from './src/components/Composer';
 import { parsePairingUri } from './src/connection/pairing-uri';
 import { pairWithPc, RemoteClient } from './src/connection/remote-client';
+import { deviceName as phoneDeviceName, modelName as phoneModelName, osName as phoneOsName } from 'expo-device';
+import { resolveDeviceName } from './src/connection/device-name';
 import type {
   BackgroundAgent, BackgroundShell, ModelCapabilities, OpenProject, PendingAsk, PermissionMode,
   SessionListItem, SessionSnapshot,
@@ -307,8 +309,10 @@ function AppContent() {
   const handleScan = useCallback(async (uri: string) => {
     try {
       setPage('home'); setBusy(true);
-      const offer = parsePairingUri(uri);
-      const stored = await pairWithPc(offer, `EasyMint ${Platform.OS}`, (code) => {
+      const target = parsePairingUri(uri);
+      // 上报真实设备名：电脑端弹窗里靠它认出是哪台手机，写死成 'EasyMint ios' 时两台机器长得一样
+      const reportedName = resolveDeviceName({ deviceName: phoneDeviceName, modelName: phoneModelName, osName: phoneOsName });
+      const stored = await pairWithPc(target, reportedName, (code) => {
         setPairCode(code);
         setBusy(false);
       });

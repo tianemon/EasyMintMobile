@@ -6,6 +6,8 @@ import type {
   RemoteEvent,
 } from '../protocol/types';
 import { resultError } from './remote-result';
+import { decodePairingPayload, validatePairingOffer } from './pairing-uri';
+import type { PairingTarget } from './pairing-uri';
 import {
   base64,
   computeSharedSecret,
@@ -62,17 +64,64 @@ function parseMessage(event: MessageEvent): JsonObject | null {
   }
 }
 
+/**
+ * 短码换完整载荷：二维码里只有地址/端口/6 位码，公钥与 token 走这条查询拿。
+ * 服务端只回载荷、不消耗短码；token 的一次性消费仍在 init 那一步。
+ */
+async function lookupOffer(socket: WebSocket, code: string): Promise<PairingOffer> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('电脑端没有响应，请重新生成二维码')), 5_000);
+    const done = (error?: Error, offer?: PairingOffer): void => {
+      clearTimeout(timer);
+      if (error) reject(error);
+      else if (offer) resolve(offer);
+    };
+    socket.onmessage = (event) => {
+      const message = parseMessage(event);
+      if (message?.type === 'mobile-pair-lookup-failed') {
+        done(new Error('配对二维码已过期，请在电脑上重新生成'));
+        return;
+      }
+      if (message?.type !== 'mobile-pair-offer' || typeof message.payload !== 'string') return;
+      try {
+        done(undefined, validatePairingOffer(decodePairingPayload(message.payload)));
+      } catch (e) {
+        done(e instanceof Error ? e : new Error('配对二维码内容不完整'));
+      }
+    };
+    socket.onerror = () => done(new Error('配对连接中断'));
+    socket.send(JSON.stringify({ type: 'mobile-pair-lookup', code }));
+  });
+}
+
 export async function pairWithPc(
-  offer: PairingOffer,
+  target: PairingTarget,
   deviceName: string,
   onVerificationCode: (code: string) => void,
 ): Promise<PcCredential> {
+  // 短码形态要先连上电脑换载荷；长码（旧桌面端）直接用码里的公钥
+  let offer: PairingOffer;
+  let socket: WebSocket;
+  if (target.kind === 'offer') {
+    offer = target.offer;
+    socket = await connectAny(offer.addresses, offer.port);
+  } else {
+    socket = await connectAny([target.host], target.port);
+    try {
+      offer = await lookupOffer(socket, target.code);
+    } catch (error) {
+      // 查表失败（超时/码过期/载荷非法）必须关掉这条连接：长码路径由下面的 finish 统一关，
+      // 短码路径若漏了这里，失败一次就漏一条 socket——服务端 MAX_CONNECTIONS 很快被占满，
+      // 之后连「重试」都会被 1013 拒掉。
+      socket.close();
+      throw error;
+    }
+  }
   const deviceId = randomId();
   const pair = createPairingKeyPair();
   const sharedSecret = computeSharedSecret(pair.secretKey, offer.publicKey);
   const keys = deriveKeys(sharedSecret);
   onVerificationCode(pairingCode(keys.auth, offer.token));
-  const socket = await connectAny(offer.addresses, offer.port);
 
   return await new Promise<PcCredential>((resolve, reject) => {
     const timeout = setTimeout(() => {
