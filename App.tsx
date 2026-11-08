@@ -189,10 +189,28 @@ function AppContent() {
     // 也会让 pendingPcId 的自动进入提前触发
     setConnection('connecting');
     const off = next.onStatus(setConnection);
+    // 电脑端撤销了这台设备：清掉本地凭证并回扫码页。
+    // 不清的话 App 会一直认为「已配对」，停在设备列表里无限重连（而且电脑上已经没有这条记录了）。
+    const offRevoked = next.onPairingRevoked(() => {
+      void (async () => {
+        try {
+          const book = await removeDevice(credential.pcId);
+          setDevices(book.devices);
+          setActivePcId(book.activePcId);
+          setProject(null);
+          setSessions([]);
+          // 还有别的电脑就回设备列表，一台都不剩才回扫码页
+          setPage(book.activePcId ? 'home' : 'scanner');
+          setError('这台电脑上的配对已失效，请重新扫码配对');
+        } catch (e) {
+          fail(e);
+        }
+      })();
+    });
     // 后台连接：失败不弹窗（电脑关机/不在同一网络都很常见），设备行上的圆点与文案就是结果。
     // 用户点这台设备时会再试一次，那一次失败才需要说话。
     void next.connect().catch(() => undefined);
-    return () => { off(); next.close(); };
+    return () => { off(); offRevoked(); next.close(); };
   }, [credential]);
 
   const refreshProjects = useCallback(async () => {
