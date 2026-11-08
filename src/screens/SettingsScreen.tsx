@@ -1,5 +1,6 @@
 import appConfig from '../../app.json';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppearanceSlider } from '../components/AppearanceSlider';
 import { Glass } from '../components/Glass';
 import { Header } from '../components/Header';
@@ -9,7 +10,7 @@ import type { StoredDevice } from '../security/credential-store';
 import { makeCommonStyles } from '../theme/commonStyles';
 import type { ThemeColors } from '../theme/tokens';
 import { chatInset, fontSize, radius, space } from '../theme/tokens';
-import { useThemedStyles } from '../theme/theme-context';
+import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { ConnectionStatus } from '../types';
 
 type SettingsScreenProps = {
@@ -18,6 +19,9 @@ type SettingsScreenProps = {
   onBack: () => void;
   onRepair: () => void;
   onForget: () => void;
+  /** 本机在电脑上显示的名字（iOS 拿不到系统设备名，只能让用户自己起） */
+  selfName: string;
+  onRenameSelf: (name: string) => void;
 };
 
 const VERSION = `${appConfig.expo.version} (${appConfig.expo.android?.versionCode ?? 1})`;
@@ -38,11 +42,21 @@ const CARD_INSET = space.s4;
  * 操作按钮直接压在卡片上（不再各自包一块玻璃）——在卡片里再嵌玻璃会变成第三层材质，
  * 深色下尤其发灰。
  */
-export function SettingsScreen({ device, connection, onBack, onRepair, onForget }: SettingsScreenProps) {
+export function SettingsScreen({ device, connection, onBack, onRepair, onForget, selfName, onRenameSelf }: SettingsScreenProps) {
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const commonStyles = useThemedStyles(makeCommonStyles);
   const status = connection === 'connected' ? '已连接' : connection === 'connecting' ? '正在连接' : '未连接';
   const ip = device?.addresses.find((address) => /^\d+\./.test(address)) ?? device?.addresses[0];
+
+  const commitName = (): void => {
+    if (!editingName) return;
+    setEditingName(false);
+    const next = draftName.trim();
+    if (next && next !== selfName) onRenameSelf(next);
+  };
 
   return <View style={commonStyles.fill}>
     <Header title="设置" onBack={onBack} />
@@ -50,6 +64,31 @@ export function SettingsScreen({ device, connection, onBack, onRepair, onForget 
       {/* 外观：滑块自己就是一块玻璃，不再套卡片，否则两层玻璃叠在一起会发闷 */}
       <Text style={styles.groupLabel}>外观</Text>
       <View style={styles.sliderWrap}><AppearanceSlider /></View>
+
+      <Text style={styles.groupLabel}>本机</Text>
+      <Glass variant="frosted" radius={16} elevated={false} style={styles.card}>
+        {editingName ? (
+          <View style={styles.row}>
+            <TextInput
+              autoFocus
+              value={draftName}
+              onChangeText={setDraftName}
+              onBlur={commitName}
+              onSubmitEditing={() => Keyboard.dismiss()}
+              maxLength={40}
+              returnKeyType="done"
+              placeholder="给这台手机起个名字"
+              placeholderTextColor={colors.textMuted}
+              style={styles.nameInput}
+            />
+          </View>
+        ) : (
+          <PressableScale onPress={() => { setDraftName(selfName); setEditingName(true); }} innerStyle={styles.row}>
+            <Text style={styles.rowLabel}>设备名称</Text>
+            <Text numberOfLines={1} style={styles.rowValue}>{selfName || '未命名'}</Text>
+          </PressableScale>
+        )}
+      </Glass>
 
       <Text style={styles.groupLabel}>电脑</Text>
       <Glass variant="frosted" radius={16} elevated={false} style={styles.card}>
@@ -123,6 +162,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   actionText: { fontSize: fontSize.body, fontWeight: '600', color: colors.textPrimary },
   actionDangerText: { color: colors.danger },
   rowLabel: { fontSize: fontSize.body, color: colors.textPrimary },
+  // 与设置行同高，点进输入时不跳高度
+  nameInput: { flex: 1, fontSize: fontSize.body, color: colors.textPrimary, padding: 0 },
   rowValue: { fontSize: fontSize.sm, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
   empty: { fontSize: fontSize.sm, color: colors.textSecondary },
 });

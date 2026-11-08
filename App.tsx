@@ -9,8 +9,7 @@ import { LoadingView } from './src/components/LoadingView';
 import type { ComposerProps } from './src/components/Composer';
 import { parsePairingUri } from './src/connection/pairing-uri';
 import { pairWithPc, RemoteClient } from './src/connection/remote-client';
-import { deviceName as phoneDeviceName, modelName as phoneModelName, osName as phoneOsName } from 'expo-device';
-import { resolveDeviceName } from './src/connection/device-name';
+import { loadSelfName, saveSelfName } from './src/security/device-name-store';
 import type {
   BackgroundAgent, BackgroundShell, ModelCapabilities, OpenProject, PendingAsk, PermissionMode,
   SessionListItem, SessionSnapshot,
@@ -25,7 +24,7 @@ import { SessionsScreen } from './src/screens/SessionsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ShellOutputSheet } from './src/screens/ShellOutputSheet';
 import {
-  loadDevices, markDeviceConnected, removeDevice, saveDevice, setActiveDevice,
+  loadDevices, markDeviceConnected, removeDevice, renameSelf, saveDevice, setActiveDevice,
 } from './src/security/credential-store';
 import type { StoredDevice } from './src/security/credential-store';
 import { endCompacting } from './src/session/compacting';
@@ -57,6 +56,8 @@ function AppContent() {
   const commonStyles = useThemedStyles(makeCommonStyles);
   const [page, setPage] = useState<Page>('home');
   const [devices, setDevices] = useState<StoredDevice[]>([]);
+  /** 本机名字：设置页可改，配对与重连都上报它 */
+  const [selfName, setSelfName] = useState('');
   const [activePcId, setActivePcId] = useState<string | null>(null);
   const [client, setClient] = useState<RemoteClient | null>(null);
   const [connection, setConnection] = useState<ConnectionStatus>('disconnected');
@@ -172,6 +173,8 @@ function AppContent() {
     })
       .catch(fail)
       .finally(() => setBootReady(true));
+    // 与设备本并行读，不阻塞首帧
+    void loadSelfName().then(setSelfName).catch(() => undefined);
   }, [fail]);
 
   useEffect(() => {
@@ -310,8 +313,8 @@ function AppContent() {
     try {
       setPage('home'); setBusy(true);
       const target = parsePairingUri(uri);
-      // 上报真实设备名：电脑端弹窗里靠它认出是哪台手机，写死成 'EasyMint ios' 时两台机器长得一样
-      const reportedName = resolveDeviceName({ deviceName: phoneDeviceName, modelName: phoneModelName, osName: phoneOsName });
+      // 上报设备名：用户自定义优先，其次是型号（iOS 拿不到系统里的设备名）
+      const reportedName = await loadSelfName();
       const stored = await pairWithPc(target, reportedName, (code) => {
         setPairCode(code);
         setBusy(false);
@@ -488,6 +491,16 @@ function AppContent() {
     onAddDevice={() => setPage('scanner')}
     onOpenSettings={() => setPage('settings')} />;
   else if (page === 'settings') content = <SettingsScreen device={credential} connection={connection}
+    selfName={selfName}
+    onRenameSelf={(name) => {
+      void (async () => {
+        const next = await saveSelfName(name);
+        setSelfName(next);
+        // 已配对凭证里的名字一起改：重连时 hello 带的是它，电脑端会立刻刷新
+        const book = await renameSelf(next);
+        setDevices(book.devices);
+      })().catch(fail);
+    }}
     onBack={() => setPage('home')} onRepair={() => setPage('scanner')} onForget={forgetPc} />;
   else if (page === 'projects') content = <ProjectsScreen projects={projects} statusLabel={statusLabel}
     onBack={() => setPage('home')} onOpenProject={(item) => void refreshSessions(item)} />;

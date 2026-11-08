@@ -90,6 +90,18 @@ export async function saveDevice(credential: PcCredential, options: { activate?:
 }
 
 /** 切换当前设备（只改指针，不碰凭证） */
+/**
+ * 本机改名后同步所有已存凭证里的 deviceName。
+ * 重连时 hello 带的就是它——不同步的话，电脑上永远是配对那天的旧名字。
+ */
+export async function renameSelf(name: string): Promise<DeviceBook> {
+  const book = await loadDevices();
+  const devices = book.devices.map((device) => ({ ...device, deviceName: name }));
+  const next = { ...book, devices };
+  await persist(next);
+  return next;
+}
+
 export async function setActiveDevice(pcId: string): Promise<DeviceBook> {
   const current = await loadDevices();
   if (!current.devices.some((item) => item.pcId === pcId)) return current;
