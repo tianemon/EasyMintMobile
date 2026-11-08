@@ -104,3 +104,14 @@ test('短码查表失败要关连接：漏了会占满电脑的连接上限', ()
   assert.match(source, /if \(message\?\.type === 'mobile-pair-lookup-failed'\)/,
     '必须识别 lookup-failed，别把失败当超时干等 5 秒');
 });
+
+test('配对上报的 deviceId 必须稳定：随机 id 会让同一台手机在电脑上堆记录', () => {
+  const source = readFileSync(new URL('../src/connection/remote-client.ts', import.meta.url), 'utf8');
+  // 电脑端 acceptPair 只按 deviceId 覆盖，随机 id 等于每次扫码新增一条同名设备
+  assert.match(source, /const deviceId = await appDeviceId\(\);/, 'pairWithPc 必须用稳定的本机 deviceId');
+  assert.doesNotMatch(source, /const deviceId = randomId\(\);/, '不能再按每次配对随机生成');
+
+  const install = readFileSync(new URL('../src/security/installation-id.ts', import.meta.url), 'utf8');
+  assert.match(install, /easymint\.installation-id\.v1/, '安装标识要落 SecureStore，重装前保持不变');
+  assert.match(install, /`app-\$\{/, 'App 设备带 app- 前缀，桌面端按前缀分流准入');
+});

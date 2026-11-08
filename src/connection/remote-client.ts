@@ -6,6 +6,7 @@ import type {
   RemoteEvent,
 } from '../protocol/types';
 import { resultError } from './remote-result';
+import { appDeviceId } from '../security/installation-id';
 import { decodePairingPayload, validatePairingOffer } from './pairing-uri';
 import type { PairingTarget } from './pairing-uri';
 import {
@@ -117,7 +118,8 @@ export async function pairWithPc(
       throw error;
     }
   }
-  const deviceId = randomId();
+  // 稳定的本机标识：电脑端按 deviceId 覆盖记录，随机 id 会让同一台手机堆出多条
+  const deviceId = await appDeviceId();
   const pair = createPairingKeyPair();
   const sharedSecret = computeSharedSecret(pair.secretKey, offer.publicKey);
   const keys = deriveKeys(sharedSecret);
