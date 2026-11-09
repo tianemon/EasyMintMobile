@@ -59,9 +59,7 @@ export function HomeScreen(props: HomeScreenProps) {
     <AmbientBackground style={{ top: -insets.top, bottom: -insets.bottom }} />
     <Header title="设备" right={
       <PressableScale accessibilityLabel="设置" hitSlop={8} onPress={props.onOpenSettings} style={styles.headerAction}>
-        <Glass variant="frosted" radius={13} style={styles.headerPill}>
-          <View style={styles.headerPillInner}><GearIcon size={19} color={colors.textSecondary} /></View>
-        </Glass>
+        <View style={styles.headerPillInner}><GearIcon size={19} color={colors.textSecondary} /></View>
       </PressableScale>
     } />
     {/* 设备通常只有一两台：卡片**贴着内容**长，不留一整块空面板；
@@ -110,7 +108,6 @@ export function HomeScreen(props: HomeScreenProps) {
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   headerAction: { width: 40, height: 40 },
-  headerPill: { width: 40, height: 40 },
   headerPillInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // 列表面板：左右各留 12，行内仍用 chatInset，于是正文左沿 = 28（与原型一致）
   // 底部留 96：最后一行不会被右下角按钮压住

@@ -98,6 +98,9 @@ export const lightColors = {
   glassShadow: 'rgba(14,38,26,0.20)',
   /** 玻璃上的按压层：薄白光，避免灰底把玻璃压脏 */
   glassPress: 'rgba(255,255,255,0.50)',
+  composerActive: 'rgba(65,174,145,0.18)',
+  contextRingTrack: 'rgba(185,193,191,0.62)',
+  contextRingProgress: '#16a34a',
   /** 外观分段滑块的轨道与滑块（桌面端无此组件；结构取自 EasyEdit，色值按本app中性灰校准） */
   segmentBg: '#ededeb',
   segmentThumb: '#ffffff',
@@ -209,6 +212,9 @@ export const darkColors: ThemeColors = {
   glassSheen: 'rgba(255,255,255,0.22)',
   glassShadow: 'rgba(0,0,0,0.55)',
   glassPress: 'rgba(255,255,255,0.07)',
+  composerActive: 'rgba(65,174,145,0.18)',
+  contextRingTrack: 'rgba(185,193,191,0.62)',
+  contextRingProgress: '#16a34a',
   segmentBg: '#1f1f1f',
   segmentThumb: '#333333',
   floatingActionIcon: '#b1d7bf',

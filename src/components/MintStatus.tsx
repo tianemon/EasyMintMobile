@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { fontSize } from '../theme/tokens';
 import { useTheme, useThemedStyles } from '../theme/theme-context';
 import type { ThemeColors } from '../theme/tokens';
-import { ModelGlyph, ToolIcon } from './icons';
+import { Icon, ModelGlyph, ToolIcon } from './icons';
 
 /**
  * 运行状态行：图标 + 当前动作文案，与桌面端 `StatusBar` 同构。
@@ -18,7 +18,7 @@ export function MintStatus({ text, icon }: { text: string; icon?: string }) {
   const styles = useThemedStyles(makeStyles);
   return <View style={styles.row}>
     <View style={styles.glyph}>
-      {icon
+      {icon === 'thinking' ? <Icon name="brain" size={14} color={colors.textSecondary} /> : icon
         ? <ToolIcon name={icon} size={14} color={colors.textSecondary} />
         : <ModelGlyph animated size={14} color={colors.textSecondary} />}
     </View>

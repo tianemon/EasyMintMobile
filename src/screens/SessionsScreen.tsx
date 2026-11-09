@@ -54,9 +54,7 @@ export function SessionsScreen(props: SessionsScreenProps) {
       onBack={props.onBack}
       title={<ProjectTitle name={project?.name ?? '选择项目'} status={connection} onPress={props.onSwitchProject} />}
       right={<PressableScale accessibilityLabel="归档会话" hitSlop={8} onPress={props.onOpenArchive} style={styles.headerAction}>
-        <Glass variant="frosted" radius={13} style={styles.headerPill}>
-          <View style={styles.headerPillInner}><ClockIcon size={19} color={colors.textSecondary} /></View>
-        </Glass>
+        <View style={styles.headerPillInner}><ClockIcon size={19} color={colors.textSecondary} /></View>
       </PressableScale>}
     />
     <FlatList
@@ -77,7 +75,6 @@ export function SessionsScreen(props: SessionsScreenProps) {
 
 const makeStyles = (_colors: ThemeColors) => StyleSheet.create({
   headerAction: { width: 40, height: 40 },
-  headerPill: { width: 40, height: 40 },
   headerPillInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   listFlex: { flex: 1 },
   // 底部留白给悬浮按钮，左右由每行自己的 chatInset 提供（这里不能再加，否则分隔线与文字会错开）

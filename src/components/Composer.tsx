@@ -115,25 +115,25 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       <Pressable accessibilityLabel="添加附件" accessibilityState={{ expanded: control === 'attachment' }}
         style={[styles.composerIconButton, control === 'attachment' && styles.composerControlActive]}
         onPress={() => props.onControlChange(control === 'attachment' ? null : 'attachment')}>
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={control === 'attachment' ? colors.textSecondary : colors.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={control === 'attachment' ? colors.textPrimary : colors.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
           <Path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
         </Svg>
       </Pressable>
       <View style={styles.toolbarSpacer} />
       <Pressable accessibilityLabel={`选择权限，当前 ${permissionLabel}`} style={[styles.composerIconButton, control === 'permission' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'permission' ? null : 'permission')}>
-        <ComposerIcon kind="permission" permission={permission} />
+        <ComposerIcon kind="permission" permission={permission} active={control === 'permission'} />
       </Pressable>
       <Pressable accessibilityLabel={`选择模型，当前 ${model || provider?.currentModel || '默认'}`} style={[styles.composerIconButton, control === 'model' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'model' ? null : 'model')}>
-        <ComposerIcon kind="model" />
+        <ComposerIcon kind="model" active={control === 'model'} />
       </Pressable>
       <Pressable accessibilityLabel={`选择思考等级，当前 ${THINKING_LABELS[thinking] ?? thinking}`} style={[styles.composerIconButton, control === 'thinking' && styles.composerControlActive]} onPress={() => props.onControlChange(control === 'thinking' ? null : 'thinking')}>
-        <ComposerIcon kind="thinking" />
+        <ComposerIcon kind="thinking" active={control === 'thinking'} />
       </Pressable>
       {/* 上下文使用率环：点击浮出具体数值（PC 是同位置 hover 悬浮，手机无 hover 改点击） */}
       <Pressable accessibilityLabel={contextTipText} onPress={() => setShowContextTip((value) => !value)} style={styles.contextUsage}>
         <Svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} style={styles.contextRingSvg}>
-          <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R} fill="none" stroke={colors.surfaceHover} strokeWidth={RING_STROKE} />
-          <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R} fill="none" stroke={colors.accent} strokeWidth={RING_STROKE} strokeLinecap="round"
+          <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R} fill="none" stroke={colors.contextRingTrack} strokeWidth={RING_STROKE} />
+          <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R} fill="none" stroke={colors.contextRingProgress} strokeWidth={RING_STROKE} strokeLinecap="round"
             strokeDasharray={RING_CIRCUMFERENCE}
             strokeDashoffset={contextPercent === null ? RING_CIRCUMFERENCE : RING_CIRCUMFERENCE * (1 - contextPercent / 100)} />
         </Svg>
@@ -191,7 +191,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   composerToolbar: { minHeight: 38, paddingHorizontal: space.s1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   toolbarSpacer: { flex: 1 },
   composerIconButton: { width: 26, height: 26, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
-  composerControlActive: { backgroundColor: colors.surfaceHover },
+  composerControlActive: { backgroundColor: colors.composerActive },
   contextUsage: { marginLeft: 2, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   // PC 的 .ctx-ring svg：整体旋转 -90°，让进度从 12 点方向起画
   contextRingSvg: { transform: [{ rotate: '-90deg' }] },
@@ -205,11 +205,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   composerMenuTitle: { paddingHorizontal: space.s2, paddingVertical: 6, color: colors.textMuted, fontSize: fontSize.caption, fontWeight: '600' },
   composerOption: { paddingHorizontal: 10, paddingVertical: 10, borderRadius: radius.lg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   composerOptionText: { color: colors.textPrimary, fontSize: fontSize.body },
-  // 附件菜单：容器不带分隔线（PC 的浮层也没有），靠两个按钮自带的描边区分
-  attachmentMenu: { margin: space.s1, marginTop: 2, gap: 6 },
+  // 附件菜单与手机 Web 一致：透明、内容宽度、横向排列。
+  attachmentMenu: { margin: space.s1, marginTop: 2, flexDirection: 'row', flexWrap: 'wrap', alignSelf: 'flex-start', gap: 8 },
   // minHeight 44 是移动端最小触控高度（PC 该行约 31px，手机上照搬会难点中）
-  attachmentOption: { minHeight: 44, paddingHorizontal: space.s3, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.card, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  attachmentOptionPressed: { backgroundColor: colors.surfaceHover },
+  attachmentOption: { minHeight: 44, paddingHorizontal: space.s3, borderRadius: radius.lg, backgroundColor: 'transparent', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  attachmentOptionPressed: { opacity: 0.6 },
   attachmentOptionText: { color: colors.textPrimary, fontSize: fontSize.xs },
   modelRow: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.elevated, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   selectedRow: { backgroundColor: colors.selectedRowBg, borderWidth: 1, borderColor: colors.selectedRowBorder },

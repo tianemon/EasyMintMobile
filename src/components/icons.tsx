@@ -316,6 +316,7 @@ function toolIconShape(name: string): ReactNode | null {
     case 'bash': case 'powershell': return <><Path d="m7 11 2-2-2-2" /><Path d="M11 13h4" /><Rect width={18} height={18} x={3} y={3} rx={2} ry={2} /></>;
     case 'edit': return <><Path d="M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34" /><Path d="M14 2v5a1 1 0 0 0 1 1h5" /><Path d="M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z" /></>;
     case 'read': return <><Path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><Circle cx={12} cy={12} r={3} /></>;
+    case 'generate_image': return <><Rect x={3} y={3} width={18} height={18} rx={2} /><Circle cx={8} cy={8} r={1} /><Path d="m21 15-5-5L5 21" /></>;
     case 'write': return <><Path d="M13 21h8" /><Path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /></>;
     // 搜索文件（file-search-corner）
     case 'grep': return <><Path d="M11.1 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.589 3.588A2.4 2.4 0 0 1 20 8v3.25" /><Path d="M14 2v5a1 1 0 0 0 1 1h5" /><Path d="m21 22-2.88-2.88" /><Circle cx={16} cy={17} r={3} /></>;
@@ -366,9 +367,9 @@ export function ToolIcon({ name, size = iconSize.tool, color }: { name: string; 
 // ── 输入卡与其它自有图标 ──────────────────────────────
 
 /** 输入卡工具栏图标：模型 / 权限 / 思考等级 */
-export function ComposerIcon({ kind, permission }: { kind: 'model' | 'permission' | 'thinking'; permission?: PermissionMode }) {
+export function ComposerIcon({ kind, permission, active = false }: { kind: 'model' | 'permission' | 'thinking'; permission?: PermissionMode; active?: boolean }) {
   const { colors } = useTheme();
-  const color = kind === 'permission' && permission === 'full' ? colors.permissionOn : colors.textMuted;
+  const color = kind === 'permission' && permission === 'full' ? colors.permissionOn : active ? colors.textPrimary : colors.textMuted;
   if (kind === 'model') return <ModelGlyph size={15} color={color} />;
   if (kind === 'permission') return <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
     <Path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
